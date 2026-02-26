@@ -20,6 +20,10 @@ export default function PasteInput({ onSaved }) {
 
   async function handleSave() {
     if (!parsed) return;
+    if (!parsed.battleDate) {
+      setError('Battle report is missing a date/time. Cannot import without it.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccess(false);
@@ -74,9 +78,14 @@ export default function PasteInput({ onSaved }) {
             <Stat label="Damage Dealt" value={formatNumber(parsed.damageDealt)} />
           </div>
 
+          {!parsed.battleDate && (
+            <p className="text-red-400 text-xs mt-1">
+              ⚠ Missing battle date/time — this report cannot be saved.
+            </p>
+          )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !parsed.battleDate}
             className="mt-2 w-full sm:w-auto cursor-pointer px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
           >
             {saving ? 'Saving...' : 'Save Run'}
