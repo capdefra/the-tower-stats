@@ -31,7 +31,6 @@ const METRIC_SECTIONS = [
     section: 'Overview',
     metrics: [
       { key: 'wave', label: 'Wave', format: fmtInt },
-      { key: 'tier', label: 'Tier', format: (v) => v ?? '—' },
       { key: 'realTimeSeconds', label: 'Real Time', format: formatSeconds },
       { key: 'gameTimeSeconds', label: 'Game Time', format: formatSeconds },
     ],
@@ -155,6 +154,8 @@ const METRIC_MAP = Object.fromEntries(
 
 const AXIS_COLORS = { left: '#f59e0b', right: '#3b82f6' };
 
+/* ─── Sub-components ─── */
+
 function MetricPicker({ selectedKeys, onToggle }) {
   const [open, setOpen] = useState(false);
 
@@ -216,10 +217,123 @@ function MetricPicker({ selectedKeys, onToggle }) {
   );
 }
 
+function TierFilter({ tiers, value, onChange }) {
+  if (tiers.length <= 1) return null;
+
+  return (
+    <select
+      value={value ?? ''}
+      onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+      className="cursor-pointer rounded-lg border bg-gray-800 border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+    >
+      <option value="">All Tiers</option>
+      {tiers.map((t) => (
+        <option key={t} value={t}>Tier {t}</option>
+      ))}
+    </select>
+  );
+}
+
+const RANGE_THUMB = `
+  [&::-webkit-slider-thumb]:pointer-events-auto
+  [&::-webkit-slider-thumb]:appearance-none
+  [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+  [&::-webkit-slider-thumb]:rounded-full
+  [&::-webkit-slider-thumb]:bg-amber-400
+  [&::-webkit-slider-thumb]:border-2
+  [&::-webkit-slider-thumb]:border-gray-950
+  [&::-webkit-slider-thumb]:cursor-grab
+  [&::-webkit-slider-thumb]:active:cursor-grabbing
+  [&::-webkit-slider-thumb]:hover:bg-amber-300
+  [&::-moz-range-thumb]:pointer-events-auto
+  [&::-moz-range-thumb]:appearance-none
+  [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5
+  [&::-moz-range-thumb]:rounded-full
+  [&::-moz-range-thumb]:bg-amber-400
+  [&::-moz-range-thumb]:border-2
+  [&::-moz-range-thumb]:border-gray-950
+  [&::-moz-range-thumb]:cursor-grab
+`.trim();
+
+function TimelineSlider({ length, rangeStart, rangeEnd, onChange, getLabel }) {
+  if (length < 2) return null;
+
+  const max = length - 1;
+
+  function handleMinChange(e) {
+    const val = parseInt(e.target.value, 10);
+    onChange(Math.min(val, rangeEnd), rangeEnd);
+  }
+
+  function handleMaxChange(e) {
+    const val = parseInt(e.target.value, 10);
+    onChange(rangeStart, Math.max(val, rangeStart));
+  }
+
+  const leftPct = max > 0 ? (rangeStart / max) * 100 : 0;
+  const rightPct = max > 0 ? ((max - rangeEnd) / max) * 100 : 0;
+  const showing = rangeEnd - rangeStart + 1;
+
+  return (
+    <div className="space-y-0.5 px-1">
+      {/* Date labels */}
+      <div className="flex justify-between text-[10px] text-gray-500">
+        <span>{getLabel(rangeStart)}</span>
+        {rangeStart !== rangeEnd && <span>{getLabel(rangeEnd)}</span>}
+      </div>
+
+      {/* Slider track */}
+      <div className="relative h-6">
+        {/* Full track background */}
+        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1 bg-gray-700 rounded-full" />
+
+        {/* Active segment */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 h-1 bg-amber-500/50 rounded-full"
+          style={{ left: `${leftPct}%`, right: `${rightPct}%` }}
+        />
+
+        {/* Min handle */}
+        <input
+          type="range"
+          min={0}
+          max={max}
+          value={rangeStart}
+          onChange={handleMinChange}
+          className={`absolute w-full h-6 appearance-none bg-transparent pointer-events-none ${RANGE_THUMB}`}
+          style={{ zIndex: rangeStart > max * 0.9 ? 5 : 3 }}
+        />
+
+        {/* Max handle */}
+        <input
+          type="range"
+          min={0}
+          max={max}
+          value={rangeEnd}
+          onChange={handleMaxChange}
+          className={`absolute w-full h-6 appearance-none bg-transparent pointer-events-none ${RANGE_THUMB}`}
+          style={{ zIndex: 4 }}
+        />
+      </div>
+
+      {/* Run count */}
+      {showing < length && (
+        <div className="text-center text-[10px] text-gray-500">
+          Showing {showing} of {length} runs
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main component ─── */
+
 export default function Dashboard({ refreshKey }) {
   const [selectedKeys, setSelectedKeys] = useState(['wave']);
-  // chartKeys: [leftKey, rightKey] — up to 2 plotted metrics
   const [chartKeys, setChartKeys] = useState(['wave']);
+  const [tierFilter, setTierFilter] = useState(null);
+  const [rangeStart, setRangeStart] = useState(0);
+  const [rangeEnd, setRangeEnd] = useState(null); // null = end of array
 
   const runs = getLocalRuns();
 
@@ -238,15 +352,19 @@ export default function Dashboard({ refreshKey }) {
   function toggleChart(key) {
     setChartKeys((prev) => {
       if (prev.includes(key)) {
-        // Remove from chart (but keep at least 0)
         return prev.filter((k) => k !== key);
       }
       if (prev.length < 2) {
         return [...prev, key];
       }
-      // Both slots full — replace the left (first) slot
       return [key, prev[1]];
     });
+  }
+
+  function handleTierChange(tier) {
+    setTierFilter(tier);
+    setRangeStart(0);
+    setRangeEnd(null);
   }
 
   function axisOf(key) {
@@ -260,15 +378,37 @@ export default function Dashboard({ refreshKey }) {
   const leftMetric = METRIC_MAP[chartKeys[0]];
   const rightMetric = chartKeys[1] ? METRIC_MAP[chartKeys[1]] : null;
 
+  /* ── Data pipeline ── */
+
+  // Step 1: all runs sorted by date
   const sorted = [...runs]
     .filter((r) => r.battleDate != null)
     .sort((a, b) => new Date(a.battleDate) - new Date(b.battleDate));
+
+  // Step 2: unique tiers (from full dataset)
+  const uniqueTiers = [...new Set(sorted.map((r) => r.tier).filter((t) => t != null))].sort(
+    (a, b) => a - b
+  );
+
+  // Step 3: tier filter
+  const tierFiltered = tierFilter != null
+    ? sorted.filter((r) => r.tier === tierFilter)
+    : sorted;
+
+  // Step 4: date range
+  const effectiveEnd = rangeEnd != null
+    ? Math.min(rangeEnd, tierFiltered.length - 1)
+    : tierFiltered.length - 1;
+  const effectiveStart = Math.min(rangeStart, Math.max(effectiveEnd, 0));
+  const displayed = tierFiltered.slice(effectiveStart, effectiveEnd + 1);
+
+  /* ── Chart config ── */
 
   const datasets = [];
   if (leftMetric) {
     datasets.push({
       label: leftMetric.label,
-      data: sorted.map((r) => (r[leftMetric.key] != null ? Number(r[leftMetric.key]) : null)),
+      data: displayed.map((r) => (r[leftMetric.key] != null ? Number(r[leftMetric.key]) : null)),
       borderColor: AXIS_COLORS.left,
       backgroundColor: AXIS_COLORS.left + '26',
       cubicInterpolationMode: 'monotone',
@@ -283,7 +423,7 @@ export default function Dashboard({ refreshKey }) {
   if (rightMetric) {
     datasets.push({
       label: rightMetric.label,
-      data: sorted.map((r) => (r[rightMetric.key] != null ? Number(r[rightMetric.key]) : null)),
+      data: displayed.map((r) => (r[rightMetric.key] != null ? Number(r[rightMetric.key]) : null)),
       borderColor: AXIS_COLORS.right,
       backgroundColor: AXIS_COLORS.right + '26',
       cubicInterpolationMode: 'monotone',
@@ -296,8 +436,7 @@ export default function Dashboard({ refreshKey }) {
     });
   }
 
-  const chartData = { labels: sorted.map((r) => r.battleDate), datasets };
-
+  const chartData = { labels: displayed.map((r) => r.battleDate), datasets };
   const chartMetrics = [leftMetric, rightMetric].filter(Boolean);
 
   const chartOptions = {
@@ -356,6 +495,8 @@ export default function Dashboard({ refreshKey }) {
     },
   };
 
+  /* ── Render ── */
+
   if (runs.length === 0) {
     return (
       <p className="text-gray-500 text-sm italic">
@@ -366,8 +507,9 @@ export default function Dashboard({ refreshKey }) {
 
   return (
     <div className="space-y-4">
-      {/* Metric picker + pills */}
+      {/* Controls row: tier filter + metric picker + pills */}
       <div className="flex gap-2 flex-wrap items-center">
+        <TierFilter tiers={uniqueTiers} value={tierFilter} onChange={handleTierChange} />
         <MetricPicker selectedKeys={selectedKeys} onToggle={toggleMetric} />
         {selectedMetrics.map((m) => {
           const axis = axisOf(m.key);
@@ -408,7 +550,7 @@ export default function Dashboard({ refreshKey }) {
 
       {/* Chart */}
       <div className="h-56 sm:h-72 md:h-80">
-        {sorted.length > 1 && chartKeys.length > 0 ? (
+        {displayed.length > 1 && chartKeys.length > 0 ? (
           <Line data={chartData} options={chartOptions} />
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500 text-sm italic">
@@ -418,6 +560,15 @@ export default function Dashboard({ refreshKey }) {
           </div>
         )}
       </div>
+
+      {/* Timeline range slider */}
+      <TimelineSlider
+        length={tierFiltered.length}
+        rangeStart={effectiveStart}
+        rangeEnd={effectiveEnd}
+        onChange={(s, e) => { setRangeStart(s); setRangeEnd(e); }}
+        getLabel={(i) => tierFiltered[i]?.battleDate ?? ''}
+      />
 
       {/* Data table */}
       <div className="-mx-3 sm:mx-0 overflow-x-auto">
@@ -440,7 +591,7 @@ export default function Dashboard({ refreshKey }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((run, i) => (
+            {displayed.map((run, i) => (
               <tr
                 key={run.id || i}
                 className="border-b border-gray-800 hover:bg-gray-800/40"
