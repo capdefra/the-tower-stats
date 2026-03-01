@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { parseBattleReport, formatNumber, formatSeconds } from '../utils/parser';
 import { saveLocalRun } from '../utils/storage';
 
@@ -8,6 +8,7 @@ export default function PasteInput({ onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const textareaRef = useRef(null);
 
   function handleChange(e) {
     const val = e.target.value;
@@ -16,6 +17,34 @@ export default function PasteInput({ onSaved }) {
     setSuccess(false);
     const result = parseBattleReport(val);
     setParsed(result);
+  }
+
+  /** Auto-save when the user pastes text directly into the textarea. */
+  function handlePaste(e) {
+    const pasted = e.clipboardData?.getData('text');
+    if (!pasted?.trim()) return;
+
+    // Prevent default so we control the value
+    e.preventDefault();
+    setText(pasted);
+    setError(null);
+    setSuccess(false);
+
+    const result = parseBattleReport(pasted);
+    setParsed(result);
+
+    // Auto-save if valid
+    if (result?.battleDate) {
+      try {
+        const { wasDuplicate } = saveLocalRun(result);
+        setSuccess(wasDuplicate ? 'duplicate' : 'new');
+        setText('');
+        setParsed(null);
+        onSaved?.();
+      } catch (err) {
+        setError(err.message || 'Failed to save');
+      }
+    }
   }
 
   async function handleSave() {
@@ -51,10 +80,22 @@ export default function PasteInput({ onSaved }) {
       setText(clipText);
       setError(null);
       setSuccess(false);
+
       const result = parseBattleReport(clipText);
       setParsed(result);
-    } catch (err) {
-      setError('Could not read clipboard: ' + err.message);
+
+      // Auto-save if valid
+      if (result?.battleDate) {
+        const { wasDuplicate } = saveLocalRun(result);
+        setSuccess(wasDuplicate ? 'duplicate' : 'new');
+        setText('');
+        setParsed(null);
+        onSaved?.();
+      }
+    } catch {
+      // Clipboard API not available — focus textarea so user can paste manually
+      textareaRef.current?.focus();
+      setError(null);
     }
   }
 
@@ -76,12 +117,14 @@ export default function PasteInput({ onSaved }) {
           </button>
         </div>
         <textarea
+          ref={textareaRef}
           id="battle-report"
           rows={6}
           className="w-full rounded-lg bg-gray-800 border border-gray-700 text-gray-100 p-3 text-sm font-mono placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-y"
           placeholder="Paste your full Battle Report text here..."
           value={text}
           onChange={handleChange}
+          onPaste={handlePaste}
         />
       </div>
 
