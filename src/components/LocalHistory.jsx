@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { formatNumber, formatSeconds, parseBattleReport } from '../utils/parser';
+import EnemyIcon from './EnemyIcon';
 import {
   getLocalRuns,
   clearLocalRuns,
@@ -172,7 +173,9 @@ export default function LocalHistory({ refreshKey, onChanged }) {
               <span className="text-amber-400 font-bold text-lg">T{run.tier ?? '?'}</span>
               <span className="text-gray-100 font-semibold">Wave {run.wave ?? '—'}</span>
               {run.killedBy && (
-                <span className="text-xs text-gray-500">by {run.killedBy}</span>
+                <span className="text-xs text-gray-500 inline-flex items-center gap-1">
+                  by <EnemyIcon name={run.killedBy} size={16} />
+                </span>
               )}
             </div>
             <div className="flex gap-4 text-xs text-gray-300">
