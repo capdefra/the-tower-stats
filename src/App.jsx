@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import PasteInput from './components/PasteInput';
 import LocalHistory from './components/LocalHistory';
+import Milestones from './components/Milestones';
 import Dashboard from './components/Dashboard';
 
-const TABS = ['Import', 'History', 'Dashboard'];
+const TABS = ['Import', 'History', 'Milestones', 'Dashboard'];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(0);
@@ -48,7 +49,8 @@ export default function App() {
       <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {activeTab === 0 && <PasteInput onSaved={handleSaved} />}
         {activeTab === 1 && <LocalHistory refreshKey={refreshKey} onChanged={handleSaved} />}
-        {activeTab === 2 && <Dashboard refreshKey={refreshKey} />}
+        {activeTab === 2 && <Milestones refreshKey={refreshKey} onChanged={handleSaved} />}
+        {activeTab === 3 && <Dashboard refreshKey={refreshKey} />}
       </main>
 
       {/* Footer */}
