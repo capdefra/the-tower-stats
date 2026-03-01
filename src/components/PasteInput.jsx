@@ -1,7 +1,6 @@
 import { useState, useRef } from 'react';
 import { parseBattleReport, formatNumber, formatSeconds } from '../utils/parser';
 import { saveLocalRun } from '../utils/storage';
-import EnemyIcon from './EnemyIcon';
 
 export default function PasteInput({ onSaved }) {
   const [text, setText] = useState('');
@@ -113,7 +112,7 @@ export default function PasteInput({ onSaved }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <Stat label="Tier" value={parsed.tier} />
             <Stat label="Wave" value={parsed.wave} />
-            <Stat label="Killed By" value={<EnemyIcon name={parsed.killedBy} size={22} />} />
+            <Stat label="Killed By" value={parsed.killedBy || '—'} />
             <Stat label="Coins" value={formatNumber(parsed.coinsEarned)} />
             <Stat label="Cells" value={formatNumber(parsed.cellsEarned)} />
             <Stat label="Total Elites" value={parsed.totalElites} />
