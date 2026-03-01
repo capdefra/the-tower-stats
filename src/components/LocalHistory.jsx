@@ -61,29 +61,6 @@ export default function LocalHistory({ refreshKey, onChanged }) {
     URL.revokeObjectURL(url);
   }
 
-  async function handleClipboardImport() {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text.trim()) {
-        setImportMsg('Clipboard is empty.');
-        return;
-      }
-      const result = importLocalRuns(text);
-      if (typeof result === 'object') {
-        let msg = `Imported ${result.runsAdded} new run${result.runsAdded !== 1 ? 's' : ''}`;
-        if (result.milestonesAdded > 0) {
-          msg += ` and ${result.milestonesAdded} milestone${result.milestonesAdded !== 1 ? 's' : ''}`;
-        }
-        setImportMsg(msg + '.');
-      } else {
-        setImportMsg(`Imported ${result} new run${result !== 1 ? 's' : ''}.`);
-      }
-      onChanged?.();
-    } catch (err) {
-      setImportMsg('Import failed: ' + err.message);
-    }
-  }
-
   function handleImport(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -120,16 +97,10 @@ export default function LocalHistory({ refreshKey, onChanged }) {
         {/* Still show import when empty */}
         <div className="flex gap-2">
           <button
-            onClick={handleClipboardImport}
-            className="cursor-pointer text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 transition-colors"
-          >
-            📋 Paste Import
-          </button>
-          <button
             onClick={() => fileRef.current?.click()}
             className="cursor-pointer text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 transition-colors"
           >
-            Import File
+            Import Data
           </button>
           <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
         </div>
@@ -155,12 +126,6 @@ export default function LocalHistory({ refreshKey, onChanged }) {
             className="cursor-pointer text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 transition-colors"
           >
             Export
-          </button>
-          <button
-            onClick={handleClipboardImport}
-            className="cursor-pointer text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 transition-colors"
-          >
-            📋 Paste
           </button>
           <button
             onClick={() => fileRef.current?.click()}

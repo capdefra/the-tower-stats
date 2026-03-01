@@ -41,15 +41,40 @@ export default function PasteInput({ onSaved }) {
     }
   }
 
+  async function handleClipboardImport() {
+    try {
+      const clipText = await navigator.clipboard.readText();
+      if (!clipText.trim()) {
+        setError('Clipboard is empty.');
+        return;
+      }
+      setText(clipText);
+      setError(null);
+      setSuccess(false);
+      const result = parseBattleReport(clipText);
+      setParsed(result);
+    } catch (err) {
+      setError('Could not read clipboard: ' + err.message);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
-        <label
-          htmlFor="battle-report"
-          className="block text-sm font-medium text-gray-300 mb-1"
-        >
-          Paste Battle Report
-        </label>
+        <div className="flex items-center justify-between mb-1">
+          <label
+            htmlFor="battle-report"
+            className="block text-sm font-medium text-gray-300"
+          >
+            Paste Battle Report
+          </label>
+          <button
+            onClick={handleClipboardImport}
+            className="cursor-pointer text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 transition-colors"
+          >
+            📋 Import from Clipboard
+          </button>
+        </div>
         <textarea
           id="battle-report"
           rows={6}
