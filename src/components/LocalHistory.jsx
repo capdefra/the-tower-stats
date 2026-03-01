@@ -174,7 +174,7 @@ export default function LocalHistory({ refreshKey, onChanged }) {
               <span className="text-gray-100 font-semibold">Wave {run.wave ?? '—'}</span>
               {run.killedBy && (
                 <span className="text-xs text-gray-500 inline-flex items-center gap-1">
-                  by <EnemyIcon name={run.killedBy} size={28} />
+                  by <EnemyIcon name={run.killedBy} size={22} />
                 </span>
               )}
             </div>
