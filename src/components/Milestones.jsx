@@ -191,7 +191,9 @@ function LabResearchSection({ onSaved }) {
     refresh();
   }
 
-  const labMilestones = milestones.filter((m) => m.type === 'lab_research');
+  const labMilestones = milestones
+    .filter((m) => m.type === 'lab_research')
+    .sort((a, b) => new Date(b.completionTimestamp) - new Date(a.completionTimestamp));
 
   return (
     <div className="space-y-4">
