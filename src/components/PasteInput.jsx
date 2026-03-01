@@ -113,7 +113,7 @@ export default function PasteInput({ onSaved }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <Stat label="Tier" value={parsed.tier} />
             <Stat label="Wave" value={parsed.wave} />
-            <Stat label="Killed By" value={<EnemyIcon name={parsed.killedBy} size={18} />} />
+            <Stat label="Killed By" value={<EnemyIcon name={parsed.killedBy} size={28} />} />
             <Stat label="Coins" value={formatNumber(parsed.coinsEarned)} />
             <Stat label="Cells" value={formatNumber(parsed.cellsEarned)} />
             <Stat label="Total Elites" value={parsed.totalElites} />

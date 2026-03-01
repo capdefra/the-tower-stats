@@ -606,7 +606,7 @@ export default function Dashboard({ refreshKey }) {
                 <td className="py-2 px-2">{run.wave ?? '—'}</td>
                 <td className="py-2 px-2">{formatNumber(run.coinsEarned)}</td>
                 <td className="py-2 px-2">{formatNumber(run.cellsEarned)}</td>
-                <td className="py-2 px-2 text-gray-400"><EnemyIcon name={run.killedBy} size={18} /></td>
+                <td className="py-2 px-2 text-gray-400"><EnemyIcon name={run.killedBy} size={24} /></td>
                 {selectedMetrics.map((m) => {
                   const axis = axisOf(m.key);
                   const color = axis ? AXIS_COLORS[axis] : '#d1d5db';
