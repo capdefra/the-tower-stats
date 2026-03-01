@@ -24,27 +24,12 @@ export default function PasteInput({ onSaved }) {
     const pasted = e.clipboardData?.getData('text');
     if (!pasted?.trim()) return;
 
-    // Prevent default so we control the value
     e.preventDefault();
     setText(pasted);
     setError(null);
     setSuccess(false);
-
     const result = parseBattleReport(pasted);
     setParsed(result);
-
-    // Auto-save if valid
-    if (result?.battleDate) {
-      try {
-        const { wasDuplicate } = saveLocalRun(result);
-        setSuccess(wasDuplicate ? 'duplicate' : 'new');
-        setText('');
-        setParsed(null);
-        onSaved?.();
-      } catch (err) {
-        setError(err.message || 'Failed to save');
-      }
-    }
   }
 
   async function handleSave() {
@@ -80,18 +65,8 @@ export default function PasteInput({ onSaved }) {
       setText(clipText);
       setError(null);
       setSuccess(false);
-
       const result = parseBattleReport(clipText);
       setParsed(result);
-
-      // Auto-save if valid
-      if (result?.battleDate) {
-        const { wasDuplicate } = saveLocalRun(result);
-        setSuccess(wasDuplicate ? 'duplicate' : 'new');
-        setText('');
-        setParsed(null);
-        onSaved?.();
-      }
     } catch {
       // Clipboard API not available — focus textarea so user can paste manually
       textareaRef.current?.focus();
