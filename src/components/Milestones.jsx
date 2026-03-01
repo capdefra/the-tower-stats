@@ -307,6 +307,10 @@ function LabResearchSection({ onSaved }) {
                       {countdown.text}
                     </span>
                   </div>
+                  <p className="text-[11px] text-gray-500">
+                    {countdown.completed ? 'Completed' : 'ETA'}:{' '}
+                    {formatDate(ms.completionTimestamp)}
+                  </p>
                 </div>
               );
             })}
@@ -321,7 +325,7 @@ function LabResearchSection({ onSaved }) {
                   <th className="py-2 pr-3">Category</th>
                   <th className="py-2 pr-3">Speed</th>
                   <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Completes</th>
+                  <th className="py-2 pr-3">ETA</th>
                   <th className="py-2 pr-3"></th>
                 </tr>
               </thead>
@@ -344,12 +348,13 @@ function LabResearchSection({ onSaved }) {
                               : 'text-amber-400'
                           }
                         >
-                          {countdown.completed ? '✓ ' : '⏳ '}
-                          {countdown.text}
+                          {countdown.completed ? '✓ Completed' : `⏳ ${countdown.text}`}
                         </span>
                       </td>
-                      <td className="py-2 pr-3 text-gray-500 text-xs whitespace-nowrap">
-                        {formatDate(ms.completionTimestamp)}
+                      <td className="py-2 pr-3 text-xs whitespace-nowrap">
+                        <span className={countdown.completed ? 'text-emerald-400' : 'text-gray-400'}>
+                          {formatDate(ms.completionTimestamp)}
+                        </span>
                       </td>
                       <td className="py-2">
                         <button

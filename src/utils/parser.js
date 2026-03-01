@@ -161,7 +161,7 @@ const FIELD_PATTERNS = [
   { key: 'realTimeRaw', pattern: /Real Time\s+(\d+h\s*\d+m\s*\d+s)/ },
   { key: 'tier', pattern: /Tier\s+(\d+)/ },
   { key: 'wave', pattern: /Wave\s+(\d+)/ },
-  { key: 'killedBy', pattern: /Killed By\s+(\S+)/ },
+  { key: 'killedBy', pattern: /Killed By\s+(?!Coins |Cash |Cells |Gem |Reroll |Combat |Damage )(\S+)/ },
 
   // Coins / Cash / Gems
   { key: 'coinsEarned', pattern: numRe('Coins earned') },
