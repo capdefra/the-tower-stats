@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import LAB_RESEARCH from '../data/labResearch';
+import CARDS from '../data/cards';
 import { getMilestones, saveMilestone, deleteMilestone } from '../utils/storage';
 
 const SPEED_MULTIPLIERS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
@@ -41,14 +42,14 @@ function formatDate(iso) {
 
 /* ─── Searchable Research Picker ─── */
 
-function ResearchPicker({ selected, onSelect }) {
+function ResearchPicker({ groups, selected, onSelect, placeholder = 'Select an item...', searchPlaceholder = 'Search...' }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
   const filtered =
     search.trim() === ''
-      ? LAB_RESEARCH
-      : LAB_RESEARCH.map((group) => ({
+      ? groups
+      : groups.map((group) => ({
           category: group.category,
           items: group.items.filter((item) =>
             item.toLowerCase().includes(search.toLowerCase())
@@ -68,7 +69,7 @@ function ResearchPicker({ selected, onSelect }) {
         className="cursor-pointer w-full flex items-center justify-between rounded-lg border bg-gray-800 border-gray-700 text-gray-300 hover:text-gray-100 hover:border-gray-500 px-3 py-2 text-sm transition-colors"
       >
         <span className={selected ? 'text-gray-100' : 'text-gray-500'}>
-          {selected ? selected.name : 'Select a research...'}
+          {selected ? selected.name : placeholder}
         </span>
         <svg
           className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`}
@@ -88,7 +89,7 @@ function ResearchPicker({ selected, onSelect }) {
             <div className="sticky top-0 z-10 bg-gray-800 p-2 border-b border-gray-700">
               <input
                 type="text"
-                placeholder="Search research..."
+                placeholder={searchPlaceholder}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-md bg-gray-900 border border-gray-600 text-gray-100 px-2.5 py-1.5 text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
@@ -202,7 +203,7 @@ function LabResearchSection({ onSaved }) {
         {/* Research picker */}
         <div>
           <label className="block text-xs text-gray-400 mb-1">Research</label>
-          <ResearchPicker selected={selected} onSelect={setSelected} />
+          <ResearchPicker groups={LAB_RESEARCH} selected={selected} onSelect={setSelected} placeholder="Select a research..." searchPlaceholder="Search research..." />
         </div>
 
         {/* Time inputs + multiplier */}
@@ -378,6 +379,242 @@ function LabResearchSection({ onSaved }) {
   );
 }
 
+/* ─── Star Helpers ─── */
+
+function renderStarsInline(level) {
+  const starCount = Math.min(level, 5);
+  const colorClass =
+    level === 7 ? 'text-pink-400' : level === 6 ? 'text-yellow-400' : 'text-white';
+  return (
+    <span>
+      <span className={colorClass}>{'★'.repeat(starCount)}</span>
+      {starCount < 5 && <span className="text-gray-600">{'★'.repeat(5 - starCount)}</span>}
+    </span>
+  );
+}
+
+function StarLevelSelector({ level, onSelect }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {[1, 2, 3, 4, 5, 6, 7].map((lvl) => (
+        <button
+          key={lvl}
+          type="button"
+          onClick={() => onSelect(lvl)}
+          className={`cursor-pointer px-2 py-1.5 rounded-lg border text-sm transition-colors ${
+            level === lvl
+              ? 'border-amber-500 bg-amber-600/20'
+              : 'border-gray-700 bg-gray-800 hover:border-gray-500'
+          }`}
+        >
+          {renderStarsInline(lvl)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Cards Section ─── */
+
+function CardsSection({ onSaved }) {
+  const [mode, setMode] = useState('card_upgrade');
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [level, setLevel] = useState(1);
+  const [milestones, setMilestones] = useState(() => getMilestones());
+
+  function refresh() {
+    setMilestones(getMilestones());
+    onSaved?.();
+  }
+
+  function handleSave() {
+    if (mode === 'new_card_slot') {
+      saveMilestone({
+        type: 'cards',
+        subtype: 'new_card_slot',
+      });
+    } else {
+      if (!selectedCard) return;
+      saveMilestone({
+        type: 'cards',
+        subtype: 'card_upgrade',
+        category: selectedCard.category,
+        name: selectedCard.name,
+        level,
+      });
+    }
+    setSelectedCard(null);
+    setLevel(1);
+    refresh();
+  }
+
+  function handleDelete(id) {
+    deleteMilestone(id);
+    refresh();
+  }
+
+  const canSave = mode === 'new_card_slot' || (mode === 'card_upgrade' && selectedCard);
+
+  const cardMilestones = milestones
+    .filter((m) => m.type === 'cards')
+    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+
+  return (
+    <div className="space-y-4">
+      {/* Form */}
+      <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-4 space-y-3">
+        {/* Mode toggle */}
+        <div className="flex rounded-lg overflow-hidden border border-gray-700">
+          <button
+            type="button"
+            onClick={() => setMode('new_card_slot')}
+            className={`cursor-pointer flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+              mode === 'new_card_slot'
+                ? 'bg-amber-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            New Card Slot
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('card_upgrade')}
+            className={`cursor-pointer flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+              mode === 'card_upgrade'
+                ? 'bg-amber-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            Card Upgrade
+          </button>
+        </div>
+
+        {/* Card Upgrade fields */}
+        {mode === 'card_upgrade' && (
+          <>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Card</label>
+              <ResearchPicker
+                groups={CARDS}
+                selected={selectedCard}
+                onSelect={setSelectedCard}
+                placeholder="Select a card..."
+                searchPlaceholder="Search cards..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Level</label>
+              <StarLevelSelector level={level} onSelect={setLevel} />
+            </div>
+          </>
+        )}
+
+        {/* New Card Slot info */}
+        {mode === 'new_card_slot' && (
+          <p className="text-sm text-gray-400">
+            Record that you obtained a new card slot.
+          </p>
+        )}
+
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          disabled={!canSave}
+          className="cursor-pointer w-full sm:w-auto px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
+        >
+          Save Milestone
+        </button>
+      </div>
+
+      {/* History */}
+      {cardMilestones.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            History
+          </h3>
+
+          {/* Mobile cards */}
+          <div className="space-y-2 sm:hidden">
+            {cardMilestones.map((ms) => (
+              <div
+                key={ms.id}
+                className="rounded-lg bg-gray-800/50 border border-gray-700/50 p-3 space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                    {ms.subtype === 'card_upgrade' ? ms.category : 'Card Slot'}
+                  </span>
+                  <button
+                    onClick={() => handleDelete(ms.id)}
+                    className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="text-gray-100 font-semibold text-sm">
+                  {ms.subtype === 'card_upgrade' ? ms.name : 'New Card Slot'}
+                </div>
+                {ms.subtype === 'card_upgrade' && (
+                  <div className="text-xs">{renderStarsInline(ms.level)}</div>
+                )}
+                <p className="text-[11px] text-gray-500">{formatDate(ms.savedAt)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="text-xs text-gray-400 uppercase border-b border-gray-700">
+                  <th className="py-2 pr-3">Type</th>
+                  <th className="py-2 pr-3">Card</th>
+                  <th className="py-2 pr-3">Category</th>
+                  <th className="py-2 pr-3">Level</th>
+                  <th className="py-2 pr-3">Date</th>
+                  <th className="py-2 pr-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cardMilestones.map((ms) => (
+                  <tr
+                    key={ms.id}
+                    className="border-b border-gray-800 hover:bg-gray-800/40"
+                  >
+                    <td className="py-2 pr-3 text-gray-300 text-xs">
+                      {ms.subtype === 'card_upgrade' ? 'Upgrade' : 'New Slot'}
+                    </td>
+                    <td className="py-2 pr-3 text-gray-100 font-medium">
+                      {ms.subtype === 'card_upgrade' ? ms.name : '—'}
+                    </td>
+                    <td className="py-2 pr-3 text-gray-400 text-xs">
+                      {ms.subtype === 'card_upgrade' ? ms.category : '—'}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {ms.subtype === 'card_upgrade' ? renderStarsInline(ms.level) : '—'}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-gray-400 whitespace-nowrap">
+                      {formatDate(ms.savedAt)}
+                    </td>
+                    <td className="py-2">
+                      <button
+                        onClick={() => handleDelete(ms.id)}
+                        className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Coming Soon ─── */
 
 function ComingSoonPlaceholder() {
@@ -425,7 +662,7 @@ export default function Milestones({ refreshKey, onChanged }) {
       {activeTab === 'lab_research' && <LabResearchSection onSaved={onChanged} />}
       {activeTab === 'workshop' && <ComingSoonPlaceholder />}
       {activeTab === 'ultimate_weapons' && <ComingSoonPlaceholder />}
-      {activeTab === 'cards' && <ComingSoonPlaceholder />}
+      {activeTab === 'cards' && <CardsSection onSaved={onChanged} />}
     </div>
   );
 }
