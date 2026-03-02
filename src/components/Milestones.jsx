@@ -629,8 +629,8 @@ function ComingSoonPlaceholder() {
 
 const MILESTONE_TABS = [
   { key: 'lab_research', label: 'Lab Research' },
-  { key: 'workshop', label: 'Workshop' },
-  { key: 'ultimate_weapons', label: 'Ultimate Weapons' },
+  { key: 'workshop', label: 'Workshop', comingSoon: true },
+  { key: 'ultimate_weapons', label: 'Ultimate Weapons', comingSoon: true },
   { key: 'cards', label: 'Cards' },
 ];
 
@@ -654,6 +654,11 @@ export default function Milestones({ refreshKey, onChanged }) {
             }`}
           >
             {tab.label}
+            {tab.comingSoon && (
+              <span className="ml-1.5 text-[9px] uppercase tracking-wider text-gray-500 font-normal">
+                soon
+              </span>
+            )}
           </button>
         ))}
       </div>
