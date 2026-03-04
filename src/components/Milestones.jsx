@@ -834,16 +834,16 @@ function ComingSoonPlaceholder() {
 /* ─── Sub-tab definitions ─── */
 
 const MILESTONE_TABS = [
-  { key: 'lab_research', label: 'Lab Research' },
   { key: 'workshop', label: 'Workshop' },
-  { key: 'ultimate_weapons', label: 'Ultimate Weapons', comingSoon: true },
+  { key: 'lab_research', label: 'Lab Research' },
   { key: 'cards', label: 'Cards' },
+  { key: 'ultimate_weapons', label: 'Ultimate Weapons', comingSoon: true },
 ];
 
 /* ─── Main Component ─── */
 
 export default function Milestones({ refreshKey, onChanged }) {
-  const [activeTab, setActiveTab] = useState('lab_research');
+  const [activeTab, setActiveTab] = useState('workshop');
 
   return (
     <div className="space-y-4">
