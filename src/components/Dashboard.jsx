@@ -592,7 +592,7 @@ export default function Dashboard({ refreshKey }) {
             </tr>
           </thead>
           <tbody>
-            {displayed.map((run, i) => (
+            {[...displayed].reverse().map((run, i) => (
               <tr
                 key={run.id || i}
                 className="border-b border-gray-800 hover:bg-gray-800/40"
