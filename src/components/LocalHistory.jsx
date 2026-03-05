@@ -10,7 +10,7 @@ import {
 } from '../utils/storage';
 
 export default function LocalHistory({ refreshKey, onChanged }) {
-  const runs = getLocalRuns().sort((a, b) => new Date(b.battleDate) - new Date(a.battleDate));
+  const runs = getLocalRuns();
   const [menuOpen, setMenuOpen] = useState(null); // battleDate of open menu
   const [editing, setEditing] = useState(null); // { battleDate, json }
   const [editError, setEditError] = useState(null);
