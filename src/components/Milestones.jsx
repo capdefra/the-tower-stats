@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import LAB_RESEARCH from '../data/labResearch';
 import CARDS from '../data/cards';
 import { WORKSHOP_UNLOCKS, WORKSHOP_UPGRADES } from '../data/workshop';
+import { UW_LIST, UW_UPGRADES } from '../data/ultimateWeapons';
 import { getMilestones, saveMilestone, deleteMilestone } from '../utils/storage';
 
 const SPEED_MULTIPLIERS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
@@ -821,6 +822,229 @@ function CardsSection({ onSaved }) {
   );
 }
 
+/* ─── Ultimate Weapons Section ─── */
+
+function UltimateWeaponsSection({ onSaved }) {
+  const [mode, setMode] = useState('uw_upgrade');
+  const [selectedUnlock, setSelectedUnlock] = useState('');
+  const [selectedUpgrade, setSelectedUpgrade] = useState(null);
+  const [levels, setLevels] = useState('');
+  const [milestones, setMilestones] = useState(() => getMilestones());
+
+  function refresh() {
+    setMilestones(getMilestones());
+    onSaved?.();
+  }
+
+  function handleSave() {
+    if (mode === 'uw_unlock') {
+      if (!selectedUnlock) return;
+      saveMilestone({
+        type: 'ultimate_weapons',
+        subtype: 'uw_unlock',
+        name: selectedUnlock,
+      });
+      setSelectedUnlock('');
+    } else {
+      if (!selectedUpgrade || !parseInt(levels)) return;
+      saveMilestone({
+        type: 'ultimate_weapons',
+        subtype: 'uw_upgrade',
+        category: selectedUpgrade.category,
+        name: selectedUpgrade.name,
+        levels: parseInt(levels),
+      });
+      setSelectedUpgrade(null);
+      setLevels('');
+    }
+    refresh();
+  }
+
+  function handleDelete(id) {
+    deleteMilestone(id);
+    refresh();
+  }
+
+  const canSave =
+    mode === 'uw_unlock'
+      ? !!selectedUnlock
+      : !!(selectedUpgrade && parseInt(levels));
+
+  const uwMilestones = milestones
+    .filter((m) => m.type === 'ultimate_weapons')
+    .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+
+  return (
+    <div className="space-y-4">
+      {/* Form */}
+      <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-4 space-y-3">
+        {/* Mode toggle */}
+        <div className="flex rounded-lg overflow-hidden border border-gray-700">
+          <button
+            type="button"
+            onClick={() => { setMode('uw_unlock'); setSelectedUpgrade(null); setLevels(''); }}
+            className={`cursor-pointer flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+              mode === 'uw_unlock'
+                ? 'bg-amber-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            UW Unlock
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode('uw_upgrade'); setSelectedUnlock(''); }}
+            className={`cursor-pointer flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+              mode === 'uw_upgrade'
+                ? 'bg-amber-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            UW Upgrade
+          </button>
+        </div>
+
+        {/* Unlock picker */}
+        {mode === 'uw_unlock' && (
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Ultimate Weapon</label>
+            <select
+              value={selectedUnlock}
+              onChange={(e) => setSelectedUnlock(e.target.value)}
+              className="cursor-pointer w-full rounded-lg border bg-gray-800 border-gray-700 text-gray-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            >
+              <option value="">Select a weapon...</option>
+              {UW_LIST.map((uw) => (
+                <option key={uw} value={uw}>{uw}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Upgrade picker + levels */}
+        {mode === 'uw_upgrade' && (
+          <>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Upgrade</label>
+              <ResearchPicker
+                groups={UW_UPGRADES}
+                selected={selectedUpgrade}
+                onSelect={setSelectedUpgrade}
+                placeholder="Select an upgrade..."
+                searchPlaceholder="Search upgrades..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Levels</label>
+              <input
+                type="number"
+                min="1"
+                value={levels}
+                onChange={(e) => setLevels(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg bg-gray-800 border border-gray-700 text-gray-100 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+            </div>
+          </>
+        )}
+
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          disabled={!canSave}
+          className="cursor-pointer w-full sm:w-auto px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium text-sm transition-colors"
+        >
+          Save Milestone
+        </button>
+      </div>
+
+      {/* History */}
+      {uwMilestones.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            History
+          </h3>
+
+          {/* Mobile cards */}
+          <div className="space-y-2 sm:hidden">
+            {uwMilestones.map((ms) => (
+              <div
+                key={ms.id}
+                className="rounded-lg bg-gray-800/50 border border-gray-700/50 p-3 space-y-1"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                    {ms.subtype === 'uw_upgrade' ? ms.category : 'Unlock'}
+                  </span>
+                  <button
+                    onClick={() => handleDelete(ms.id)}
+                    className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="text-gray-100 font-semibold text-sm">{ms.name}</div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className={ms.subtype === 'uw_unlock' ? 'text-emerald-400' : 'text-gray-300'}>
+                    {ms.subtype === 'uw_unlock' ? 'Unlock' : `+${ms.levels} levels`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500">{formatDate(ms.savedAt)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block">
+            <table className="w-full text-sm text-left">
+              <thead>
+                <tr className="text-xs text-gray-400 uppercase border-b border-gray-700">
+                  <th className="py-2 pr-3">Type</th>
+                  <th className="py-2 pr-3">Name</th>
+                  <th className="py-2 pr-3">Weapon</th>
+                  <th className="py-2 pr-3">Levels</th>
+                  <th className="py-2 pr-3">Date</th>
+                  <th className="py-2 pr-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {uwMilestones.map((ms) => (
+                  <tr
+                    key={ms.id}
+                    className="border-b border-gray-800 hover:bg-gray-800/40"
+                  >
+                    <td className="py-2 pr-3 text-gray-300 text-xs">
+                      {ms.subtype === 'uw_unlock' ? 'Unlock' : 'Upgrade'}
+                    </td>
+                    <td className="py-2 pr-3 text-gray-100 font-medium">{ms.name}</td>
+                    <td className="py-2 pr-3 text-gray-400 text-xs">
+                      {ms.subtype === 'uw_upgrade' ? ms.category : '—'}
+                    </td>
+                    <td className="py-2 pr-3 text-gray-300">
+                      {ms.subtype === 'uw_upgrade' ? `+${ms.levels}` : '—'}
+                    </td>
+                    <td className="py-2 pr-3 text-xs text-gray-400 whitespace-nowrap">
+                      {formatDate(ms.savedAt)}
+                    </td>
+                    <td className="py-2">
+                      <button
+                        onClick={() => handleDelete(ms.id)}
+                        className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── Coming Soon ─── */
 
 function ComingSoonPlaceholder() {
@@ -837,7 +1061,7 @@ const MILESTONE_TABS = [
   { key: 'workshop', label: 'Workshop' },
   { key: 'lab_research', label: 'Lab Research' },
   { key: 'cards', label: 'Cards' },
-  { key: 'ultimate_weapons', label: 'Ultimate Weapons', comingSoon: true },
+  { key: 'ultimate_weapons', label: 'Ultimate Weapons' },
 ];
 
 /* ─── Main Component ─── */
@@ -872,7 +1096,7 @@ export default function Milestones({ refreshKey, onChanged }) {
       {/* Tab content */}
       {activeTab === 'lab_research' && <LabResearchSection onSaved={onChanged} />}
       {activeTab === 'workshop' && <WorkshopSection onSaved={onChanged} />}
-      {activeTab === 'ultimate_weapons' && <ComingSoonPlaceholder />}
+      {activeTab === 'ultimate_weapons' && <UltimateWeaponsSection onSaved={onChanged} />}
       {activeTab === 'cards' && <CardsSection onSaved={onChanged} />}
     </div>
   );
