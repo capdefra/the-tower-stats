@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,7 +11,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { getLocalRuns } from '../utils/storage';
+import { getLocalRuns, getMilestones } from '../utils/storage';
 import { formatNumber } from '../utils/parser';
 
 ChartJS.register(
@@ -34,6 +34,23 @@ const STAT_METRICS = [
   { key: 'coinsPerHour', label: 'Coins/Hour', color: '#3b82f6', format: formatNumber },
   { key: 'cellsEarned', label: 'Cells', color: '#10b981', format: formatNumber },
   { key: 'rerollShardsEarned', label: 'Reroll Shards', color: '#a855f7', format: formatNumber },
+];
+
+const MILESTONE_COLORS = {
+  lab_research: '#8b5cf6',
+  workshop: '#f59e0b',
+  cards: '#ec4899',
+  ultimate_weapons: '#06b6d4',
+};
+
+const MILESTONE_FILTERS = [
+  { key: 'lab_research', label: 'Lab Research', type: 'lab_research', subtype: null },
+  { key: 'workshop:workshop_unlock', label: 'Workshop Unlock', type: 'workshop', subtype: 'workshop_unlock' },
+  { key: 'workshop:workshop_upgrade', label: 'Workshop Upgrade', type: 'workshop', subtype: 'workshop_upgrade' },
+  { key: 'cards:new_card_slot', label: 'New Card Slot', type: 'cards', subtype: 'new_card_slot' },
+  { key: 'cards:card_upgrade', label: 'Card Upgrade', type: 'cards', subtype: 'card_upgrade' },
+  { key: 'ultimate_weapons:uw_unlock', label: 'UW Unlock', type: 'ultimate_weapons', subtype: 'uw_unlock' },
+  { key: 'ultimate_weapons:uw_upgrade', label: 'UW Upgrade', type: 'ultimate_weapons', subtype: 'uw_upgrade' },
 ];
 
 const RANGE_THUMB = `
@@ -226,6 +243,31 @@ function computeLinearRegression(aggregated, metricKey) {
   return aggregated.map((_, i) => slope * i + intercept);
 }
 
+/* ─── Milestone helpers ─── */
+
+function getMilestoneFilterKey(ms) {
+  if (ms.type === 'lab_research') return 'lab_research';
+  return `${ms.type}:${ms.subtype}`;
+}
+
+function formatMilestoneLabel(ms) {
+  switch (ms.type) {
+    case 'lab_research':
+      return `Lab Research: ${ms.name}`;
+    case 'workshop':
+      if (ms.subtype === 'workshop_unlock') return `Workshop Unlock: ${ms.name}`;
+      return `Workshop Upgrade: ${ms.name} (+${ms.levels} lvl)`;
+    case 'cards':
+      if (ms.subtype === 'new_card_slot') return 'New Card Slot';
+      return `Card Upgrade: ${ms.name} (${'★'.repeat(Math.min(ms.level || 0, 7))})`;
+    case 'ultimate_weapons':
+      if (ms.subtype === 'uw_unlock') return `UW Unlock: ${ms.name}`;
+      return `UW Upgrade: ${ms.name} (+${ms.levels} lvl)`;
+    default:
+      return ms.name || 'Milestone';
+  }
+}
+
 /* ─── TimelineSlider component ─── */
 
 function TimelineSlider({ length, rangeStart, rangeEnd, onChange, getLabel, periodName }) {
@@ -299,9 +341,110 @@ function TimelineSlider({ length, rangeStart, rangeEnd, onChange, getLabel, peri
   );
 }
 
+/* ─── MilestoneFilter component ─── */
+
+function MilestoneFilter({ allMilestones, enabledKeys, onChange }) {
+  // Count milestones per filter key
+  const counts = useMemo(() => {
+    const map = {};
+    for (const ms of allMilestones) {
+      const key = getMilestoneFilterKey(ms);
+      map[key] = (map[key] || 0) + 1;
+    }
+    return map;
+  }, [allMilestones]);
+
+  const totalCount = allMilestones.length;
+  if (totalCount === 0) return null;
+
+  const allEnabled = enabledKeys === null;
+  const enabledSet = enabledKeys ?? new Set();
+
+  function toggleAll() {
+    if (allEnabled) {
+      // Turn all off
+      onChange(new Set());
+    } else {
+      // Turn all on
+      onChange(null);
+    }
+  }
+
+  function toggleKey(key) {
+    let next;
+    if (allEnabled) {
+      // Switching from "all on" → keep only this one
+      next = new Set([key]);
+    } else {
+      next = new Set(enabledSet);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      // If all with counts are now enabled, go back to null (all on)
+      const allWithCounts = MILESTONE_FILTERS.filter((f) => counts[f.key] > 0);
+      if (allWithCounts.every((f) => next.has(f.key))) {
+        onChange(null);
+        return;
+      }
+    }
+    onChange(next);
+  }
+
+  function isKeyEnabled(key) {
+    return allEnabled || enabledSet.has(key);
+  }
+
+  return (
+    <div className="flex gap-1.5 flex-wrap items-center">
+      {/* Master toggle */}
+      <button
+        onClick={toggleAll}
+        className={`cursor-pointer inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-colors ${
+          allEnabled || enabledSet.size > 0
+            ? 'border-gray-500 text-gray-200 bg-gray-800'
+            : 'border-gray-700 text-gray-500 bg-gray-900'
+        }`}
+      >
+        ◆ Milestones
+        <span className="text-gray-500 text-[10px]">({totalCount})</span>
+      </button>
+
+      {/* Type/subtype pills */}
+      {MILESTONE_FILTERS.map((filter) => {
+        const count = counts[filter.key] || 0;
+        if (count === 0) return null;
+        const color = MILESTONE_COLORS[filter.type];
+        const active = isKeyEnabled(filter.key);
+        return (
+          <button
+            key={filter.key}
+            onClick={() => toggleKey(filter.key)}
+            className="cursor-pointer inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors"
+            style={
+              active
+                ? { borderColor: color, color, backgroundColor: color + '20' }
+                : { borderColor: '#374151', color: '#6b7280', backgroundColor: 'transparent' }
+            }
+          >
+            {filter.label}
+            <span style={{ opacity: 0.6 }}>({count})</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ─── MetricSection component ─── */
 
-function MetricSection({ metric, aggregated, period }) {
+function MetricSection({ metric, aggregated, period, milestones, selectedMilestoneIdx, onSelectMilestone }) {
+  const chartRef = useRef(null);
+  const selectedIdxRef = useRef(selectedMilestoneIdx);
+  selectedIdxRef.current = selectedMilestoneIdx;
+  const [chartLayout, setChartLayout] = useState(null);
+
   const avg = computeOverallAvg(aggregated, metric.key);
   const trend = computeTrend(aggregated, metric.key);
   const best = computeBest(aggregated, metric.key, period);
@@ -345,6 +488,105 @@ function MetricSection({ metric, aggregated, period }) {
     });
   }
 
+  // Milestone lane data (separate from chart)
+  const milestonesByIndex = useMemo(() => {
+    if (!milestones || milestones.length === 0) return null;
+    const groupMap = new Map();
+    for (const ms of milestones) {
+      const dateStr = ms.savedAt;
+      if (!dateStr) continue;
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) continue;
+      let key;
+      if (period === 'Weekly') key = getWeekKey(d);
+      else if (period === 'Monthly') key = getMonthKey(d);
+      else key = getDayKey(d);
+      if (!groupMap.has(key)) groupMap.set(key, []);
+      groupMap.get(key).push(ms);
+    }
+    const result = new Array(aggregated.length).fill(null);
+    let hasAny = false;
+    for (let i = 0; i < aggregated.length; i++) {
+      if (groupMap.has(aggregated[i].groupKey)) {
+        result[i] = groupMap.get(aggregated[i].groupKey);
+        hasAny = true;
+      }
+    }
+    return hasAny ? result : null;
+  }, [aggregated, period, milestones]);
+
+  // Capture chart area dimensions for milestone lane alignment
+  useEffect(() => {
+    function capture() {
+      const chart = chartRef.current;
+      if (!chart || !chart.chartArea) return;
+      const { left, right } = chart.chartArea;
+      if (right > left) {
+        setChartLayout((prev) => {
+          if (prev && prev.left === left && prev.chartWidth === right - left) return prev;
+          return { left, chartWidth: right - left };
+        });
+      }
+    }
+
+    const frame = requestAnimationFrame(capture);
+
+    const chart = chartRef.current;
+    let ro;
+    if (chart?.canvas) {
+      ro = new ResizeObserver(() => requestAnimationFrame(capture));
+      ro.observe(chart.canvas);
+    }
+
+    return () => {
+      cancelAnimationFrame(frame);
+      if (ro) ro.disconnect();
+    };
+  }, [aggregated, period]);
+
+  // Chart.js plugin: draw vertical highlight line at selected milestone
+  // Uses a ref so the plugin closure always reads the latest value
+  const milestoneHighlightPlugin = useMemo(
+    () => ({
+      id: 'milestoneHighlight',
+      afterDraw(chart) {
+        const idx = selectedIdxRef.current;
+        if (idx == null) return;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta?.data[idx]) return;
+
+        const { ctx, chartArea } = chart;
+        const x = meta.data[idx].x;
+
+        ctx.save();
+        // Subtle highlight band
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.07)';
+        ctx.fillRect(
+          x - 8,
+          chartArea.top,
+          16,
+          chartArea.bottom - chartArea.top
+        );
+        // Dashed amber vertical line
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.stroke();
+        ctx.restore();
+      },
+    }),
+    [] // stable — reads from selectedIdxRef
+  );
+
+  // Force chart redraw when selection changes
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (chart) chart.update('none');
+  }, [selectedMilestoneIdx]);
+
   const chartData = {
     labels: aggregated.map((d) => formatLabel(d.groupKey, period)),
     datasets,
@@ -381,7 +623,7 @@ function MetricSection({ metric, aggregated, period }) {
   };
 
   return (
-    <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4">
+    <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4" onClick={() => onSelectMilestone(null)}>
       {/* Header */}
       <div className="flex items-baseline justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -403,10 +645,91 @@ function MetricSection({ metric, aggregated, period }) {
         )}
       </div>
 
-      {/* Chart */}
+      {/* Chart + milestone lane */}
       {hasData && aggregated.length > 1 ? (
-        <div className="h-44 sm:h-52">
-          <Line data={chartData} options={chartOptions} />
+        <div>
+          <div className="h-44 sm:h-52">
+            <Line ref={chartRef} data={chartData} options={chartOptions} plugins={[milestoneHighlightPlugin]} />
+          </div>
+          {/* Milestone lane below x-axis */}
+          {milestonesByIndex && chartLayout && (
+            <div
+              className="relative h-4"
+              style={{
+                marginLeft: `${chartLayout.left}px`,
+                width: `${chartLayout.chartWidth}px`,
+              }}
+            >
+              {milestonesByIndex.map((group, idx) => {
+                if (!group) return null;
+                const n = milestonesByIndex.length;
+                const pct = n <= 1 ? 50 : (idx / (n - 1)) * 100;
+                const types = [...new Set(group.map((ms) => ms.type))];
+                const primaryColor =
+                  types.length === 1
+                    ? MILESTONE_COLORS[types[0]]
+                    : '#e5e7eb';
+                const isSelected = selectedMilestoneIdx === idx;
+
+                // Edge-aware tooltip positioning
+                const tooltipAlign =
+                  pct > 75
+                    ? 'right-0'
+                    : pct < 25
+                      ? 'left-0'
+                      : 'left-1/2 -translate-x-1/2';
+
+                return (
+                  <div
+                    key={idx}
+                    className="absolute group/ms cursor-pointer p-1"
+                    style={{
+                      left: `${pct}%`,
+                      transform: 'translateX(-50%)',
+                      top: '-2px',
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectMilestone(isSelected ? null : idx);
+                    }}
+                  >
+                    {/* Diamond marker */}
+                    <div
+                      className={`w-2 h-2 rotate-45 transition-all ${
+                        isSelected
+                          ? 'scale-125'
+                          : 'hover:scale-150'
+                      }`}
+                      style={{
+                        backgroundColor: primaryColor,
+                        boxShadow: isSelected
+                          ? `0 0 4px ${primaryColor}90`
+                          : 'none',
+                      }}
+                    />
+                    {/* Hover tooltip */}
+                    <div
+                      className={`hidden group-hover/ms:block pointer-events-none absolute bottom-full mb-2 ${tooltipAlign} bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-[11px] whitespace-nowrap z-50 shadow-lg max-h-48 overflow-y-auto`}
+                    >
+                      {group.map((ms, j) => (
+                        <div key={j} className="flex items-center gap-1.5">
+                          <span
+                            className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
+                            style={{
+                              backgroundColor: MILESTONE_COLORS[ms.type],
+                            }}
+                          />
+                          <span className="text-gray-200">
+                            {formatMilestoneLabel(ms)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : (
         <div className="h-44 sm:h-52 flex items-center justify-center text-gray-500 text-sm italic">
@@ -481,6 +804,8 @@ export default function Stats({ refreshKey }) {
   const [period, setPeriod] = useState('Daily');
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeEnd, setRangeEnd] = useState(null);
+  const [enabledMilestoneKeys, setEnabledMilestoneKeys] = useState(null); // null = all enabled
+  const [selectedMilestoneIdx, setSelectedMilestoneIdx] = useState(null);
 
   const runs = getLocalRuns();
 
@@ -490,10 +815,23 @@ export default function Stats({ refreshKey }) {
     [refreshKey, period]
   );
 
-  // Reset slider when period changes or data changes
+  const allMilestones = useMemo(
+    () => getMilestones(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refreshKey]
+  );
+
+  // Filter milestones by enabled types
+  const filteredMilestones = useMemo(() => {
+    if (enabledMilestoneKeys === null) return allMilestones; // all enabled
+    return allMilestones.filter((ms) => enabledMilestoneKeys.has(getMilestoneFilterKey(ms)));
+  }, [allMilestones, enabledMilestoneKeys]);
+
+  // Reset slider + selection when period changes or data changes
   useMemo(() => {
     setRangeStart(0);
     setRangeEnd(allAggregated.length > 0 ? allAggregated.length - 1 : 0);
+    setSelectedMilestoneIdx(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allAggregated.length, period]);
 
@@ -541,11 +879,24 @@ export default function Stats({ refreshKey }) {
           onChange={(s, e) => {
             setRangeStart(s);
             setRangeEnd(e);
+            setSelectedMilestoneIdx(null);
           }}
           getLabel={(idx) =>
             formatLabel(allAggregated[idx]?.groupKey ?? '', period)
           }
           periodName={period === 'Daily' ? 'day' : period === 'Weekly' ? 'week' : 'month'}
+        />
+      )}
+
+      {/* Milestone filter */}
+      {allMilestones.length > 0 && (
+        <MilestoneFilter
+          allMilestones={allMilestones}
+          enabledKeys={enabledMilestoneKeys}
+          onChange={(keys) => {
+            setEnabledMilestoneKeys(keys);
+            setSelectedMilestoneIdx(null);
+          }}
         />
       )}
 
@@ -556,6 +907,9 @@ export default function Stats({ refreshKey }) {
           metric={metric}
           aggregated={displayed}
           period={period}
+          milestones={filteredMilestones}
+          selectedMilestoneIdx={selectedMilestoneIdx}
+          onSelectMilestone={setSelectedMilestoneIdx}
         />
       ))}
     </div>
