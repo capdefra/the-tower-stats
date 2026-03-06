@@ -8,6 +8,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { getLocalRuns } from '../utils/storage';
@@ -20,7 +21,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 /* ─── Constants ─── */
@@ -28,13 +30,11 @@ ChartJS.register(
 const PERIODS = ['Daily', 'Weekly', 'Monthly'];
 
 const STAT_METRICS = [
-  { key: 'coinsEarned', label: 'Coins', format: formatNumber },
-  { key: 'coinsPerHour', label: 'Coins/Hour', format: formatNumber },
-  { key: 'cellsEarned', label: 'Cells', format: formatNumber },
-  { key: 'rerollShardsEarned', label: 'Reroll Shards', format: formatNumber },
+  { key: 'coinsEarned', label: 'Coins', color: '#f59e0b', format: formatNumber },
+  { key: 'coinsPerHour', label: 'Coins/Hour', color: '#3b82f6', format: formatNumber },
+  { key: 'cellsEarned', label: 'Cells', color: '#10b981', format: formatNumber },
+  { key: 'rerollShardsEarned', label: 'Reroll Shards', color: '#a855f7', format: formatNumber },
 ];
-
-const AXIS_COLORS = { left: '#f59e0b', right: '#3b82f6' };
 
 /* ─── Aggregation helpers ─── */
 
@@ -112,89 +112,62 @@ function aggregateRuns(runs, period) {
   return result;
 }
 
-/* ─── Component ─── */
+/* ─── Trend helpers ─── */
 
-export default function Stats({ refreshKey }) {
-  const [period, setPeriod] = useState('Daily');
-  const [chartKeys, setChartKeys] = useState(['coinsEarned']);
+function computeTrend(aggregated, metricKey) {
+  const values = aggregated
+    .map((d) => d[metricKey])
+    .filter((v) => v != null);
 
-  const runs = getLocalRuns();
+  if (values.length < 2) return null;
 
-  const aggregated = useMemo(
-    () => aggregateRuns(runs, period),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [refreshKey, period]
-  );
+  const current = values[values.length - 1];
+  const previous = values[values.length - 2];
 
-  function toggleChart(key) {
-    setChartKeys((prev) => {
-      if (prev.includes(key)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((k) => k !== key);
-      }
-      if (prev.length < 2) return [...prev, key];
-      return [key, prev[1]];
-    });
-  }
+  if (previous === 0) return null;
 
-  function axisOf(key) {
-    const idx = chartKeys.indexOf(key);
-    if (idx === 0) return 'left';
-    if (idx === 1) return 'right';
-    return null;
-  }
+  const pctChange = ((current - previous) / Math.abs(previous)) * 100;
+  return { current, previous, pctChange };
+}
 
-  /* ── Chart config ── */
+function computeOverallAvg(aggregated, metricKey) {
+  const values = aggregated
+    .map((d) => d[metricKey])
+    .filter((v) => v != null);
+  if (values.length === 0) return null;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
 
-  const leftMetric = STAT_METRICS.find((m) => m.key === chartKeys[0]);
-  const rightMetric = chartKeys[1]
-    ? STAT_METRICS.find((m) => m.key === chartKeys[1])
-    : null;
+/* ─── MetricSection component ─── */
 
-  const datasets = [];
-  if (leftMetric) {
-    datasets.push({
-      label: leftMetric.label,
-      data: aggregated.map((d) =>
-        d[leftMetric.key] != null ? Number(d[leftMetric.key]) : null
-      ),
-      borderColor: AXIS_COLORS.left,
-      backgroundColor: AXIS_COLORS.left + '26',
-      cubicInterpolationMode: 'monotone',
-      tension: 0.4,
-      pointRadius: 3,
-      pointHoverRadius: 6,
-      pointBackgroundColor: AXIS_COLORS.left,
-      yAxisID: 'y',
-      spanGaps: true,
-    });
-  }
-  if (rightMetric) {
-    datasets.push({
-      label: rightMetric.label,
-      data: aggregated.map((d) =>
-        d[rightMetric.key] != null ? Number(d[rightMetric.key]) : null
-      ),
-      borderColor: AXIS_COLORS.right,
-      backgroundColor: AXIS_COLORS.right + '26',
-      cubicInterpolationMode: 'monotone',
-      tension: 0.4,
-      pointRadius: 3,
-      pointHoverRadius: 6,
-      pointBackgroundColor: AXIS_COLORS.right,
-      yAxisID: 'y1',
-      spanGaps: true,
-    });
-  }
+function MetricSection({ metric, aggregated, period }) {
+  const avg = computeOverallAvg(aggregated, metric.key);
+  const trend = computeTrend(aggregated, metric.key);
+  const hasData = aggregated.some((d) => d[metric.key] != null);
+
+  const periodLabel =
+    period === 'Daily' ? 'day' : period === 'Weekly' ? 'week' : 'month';
 
   const chartData = {
     labels: aggregated.map((d) => formatLabel(d.groupKey, period)),
-    datasets,
+    datasets: [
+      {
+        label: metric.label,
+        data: aggregated.map((d) =>
+          d[metric.key] != null ? Number(d[metric.key]) : null
+        ),
+        borderColor: metric.color,
+        backgroundColor: metric.color + '18',
+        fill: true,
+        cubicInterpolationMode: 'monotone',
+        tension: 0.4,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        pointBackgroundColor: metric.color,
+        spanGaps: true,
+      },
+    ],
   };
-  const chartMetrics = [leftMetric, rightMetric].filter(Boolean);
-
-  const xLabel =
-    period === 'Daily' ? 'Date' : period === 'Weekly' ? 'Week' : 'Month';
 
   const chartOptions = {
     responsive: true,
@@ -204,58 +177,98 @@ export default function Stats({ refreshKey }) {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (ctx) => {
-            const m = chartMetrics[ctx.datasetIndex];
-            return m ? `${m.label}: ${m.format(ctx.parsed.y)}` : '';
-          },
+          label: (ctx) => `${metric.label}: ${metric.format(ctx.parsed.y)}`,
         },
       },
     },
     scales: {
       x: {
-        title: {
-          display: true,
-          text: xLabel,
-          color: '#9ca3af',
-          font: { size: 11 },
-        },
         ticks: { color: '#9ca3af', maxRotation: 45, font: { size: 10 } },
         grid: { color: 'rgba(75,85,99,0.3)' },
       },
       y: {
-        display: !!leftMetric,
-        position: 'left',
-        title: {
-          display: true,
-          text: leftMetric?.label ?? '',
-          color: AXIS_COLORS.left,
-          font: { size: 11, weight: 'bold' },
-        },
         ticks: {
-          color: AXIS_COLORS.left,
+          color: metric.color,
           callback: (v) => formatNumber(v),
           font: { size: 10 },
         },
-        grid: { color: 'rgba(75,85,99,0.3)' },
-      },
-      y1: {
-        display: !!rightMetric,
-        position: 'right',
-        title: {
-          display: true,
-          text: rightMetric?.label ?? '',
-          color: AXIS_COLORS.right,
-          font: { size: 11, weight: 'bold' },
-        },
-        ticks: {
-          color: AXIS_COLORS.right,
-          callback: (v) => formatNumber(v),
-          font: { size: 10 },
-        },
-        grid: { drawOnChartArea: false },
+        grid: { color: 'rgba(75,85,99,0.15)' },
       },
     },
   };
+
+  return (
+    <div className="bg-gray-900/50 rounded-xl border border-gray-800 p-4">
+      {/* Header */}
+      <div className="flex items-baseline justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{ backgroundColor: metric.color }}
+          />
+          <h3 className="text-sm font-semibold text-gray-200">
+            {metric.label}
+          </h3>
+        </div>
+        {avg != null && (
+          <span className="text-xs text-gray-400">
+            Avg per {periodLabel}:{' '}
+            <span className="font-medium text-gray-200">
+              {metric.format(avg)}
+            </span>
+          </span>
+        )}
+      </div>
+
+      {/* Chart */}
+      {hasData && aggregated.length > 1 ? (
+        <div className="h-44 sm:h-52">
+          <Line data={chartData} options={chartOptions} />
+        </div>
+      ) : (
+        <div className="h-44 sm:h-52 flex items-center justify-center text-gray-500 text-sm italic">
+          {!hasData
+            ? 'No data for this metric.'
+            : 'Need at least 2 data points to draw a chart.'}
+        </div>
+      )}
+
+      {/* Trend */}
+      {trend && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs">
+          {trend.pctChange >= 0 ? (
+            <span className="text-emerald-400">
+              ↑ {Math.abs(trend.pctChange).toFixed(1)}%
+            </span>
+          ) : (
+            <span className="text-red-400">
+              ↓ {Math.abs(trend.pctChange).toFixed(1)}%
+            </span>
+          )}
+          <span className="text-gray-500">
+            vs previous {periodLabel}
+          </span>
+          <span className="text-gray-600 ml-auto">
+            {metric.format(trend.previous)} → {metric.format(trend.current)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main component ─── */
+
+export default function Stats({ refreshKey }) {
+  const [period, setPeriod] = useState('Daily');
+
+  const runs = getLocalRuns();
+
+  const aggregated = useMemo(
+    () => aggregateRuns(runs, period),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refreshKey, period]
+  );
 
   /* ── Render ── */
 
@@ -286,95 +299,15 @@ export default function Stats({ refreshKey }) {
         ))}
       </div>
 
-      {/* Metric selector pills */}
-      <div className="flex gap-2 flex-wrap">
-        {STAT_METRICS.map((m) => {
-          const axis = axisOf(m.key);
-          const color = axis ? AXIS_COLORS[axis] : null;
-          return (
-            <span
-              key={m.key}
-              className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border cursor-pointer transition-colors ${
-                axis
-                  ? ''
-                  : 'border-gray-600 text-gray-400 hover:border-gray-400 hover:text-gray-200'
-              }`}
-              style={
-                color
-                  ? { borderColor: color, color, backgroundColor: color + '20' }
-                  : undefined
-              }
-              onClick={() => toggleChart(m.key)}
-            >
-              {axis === 'left' && (
-                <span className="text-[9px] font-bold opacity-70">L</span>
-              )}
-              {axis === 'right' && (
-                <span className="text-[9px] font-bold opacity-70">R</span>
-              )}
-              {m.label}
-            </span>
-          );
-        })}
-      </div>
-
-      {/* Chart */}
-      <div className="h-56 sm:h-72 md:h-80">
-        {aggregated.length > 1 && chartKeys.length > 0 ? (
-          <Line data={chartData} options={chartOptions} />
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-500 text-sm italic">
-            {aggregated.length <= 1
-              ? 'Need at least 2 data points to draw a chart.'
-              : 'Select a metric to display.'}
-          </div>
-        )}
-      </div>
-
-      {/* Data table */}
-      <div className="-mx-3 sm:mx-0 overflow-x-auto">
-        <table className="w-full text-sm text-left min-w-[500px]">
-          <thead>
-            <tr className="text-xs text-gray-400 uppercase border-b border-gray-700">
-              <th className="py-2 px-2">{xLabel}</th>
-              {STAT_METRICS.map((m) => {
-                const axis = axisOf(m.key);
-                const color = axis ? AXIS_COLORS[axis] : '#9ca3af';
-                return (
-                  <th key={m.key} className="py-2 px-2" style={{ color }}>
-                    {m.label}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {[...aggregated].reverse().map((row) => (
-              <tr
-                key={row.groupKey}
-                className="border-b border-gray-800 hover:bg-gray-800/40"
-              >
-                <td className="py-2 px-2 text-gray-300 whitespace-nowrap text-xs">
-                  {formatLabel(row.groupKey, period)}
-                </td>
-                {STAT_METRICS.map((m) => {
-                  const axis = axisOf(m.key);
-                  const color = axis ? AXIS_COLORS[axis] : '#d1d5db';
-                  return (
-                    <td
-                      key={m.key}
-                      className="py-2 px-2 font-medium whitespace-nowrap"
-                      style={{ color }}
-                    >
-                      {row[m.key] != null ? m.format(row[m.key]) : '—'}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Metric sections */}
+      {STAT_METRICS.map((metric) => (
+        <MetricSection
+          key={metric.key}
+          metric={metric}
+          aggregated={aggregated}
+          period={period}
+        />
+      ))}
     </div>
   );
 }
