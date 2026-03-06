@@ -36,6 +36,27 @@ const STAT_METRICS = [
   { key: 'rerollShardsEarned', label: 'Reroll Shards', color: '#a855f7', format: formatNumber },
 ];
 
+const RANGE_THUMB = `
+  [&::-webkit-slider-thumb]:pointer-events-auto
+  [&::-webkit-slider-thumb]:appearance-none
+  [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5
+  [&::-webkit-slider-thumb]:rounded-full
+  [&::-webkit-slider-thumb]:bg-amber-400
+  [&::-webkit-slider-thumb]:border-2
+  [&::-webkit-slider-thumb]:border-gray-950
+  [&::-webkit-slider-thumb]:cursor-grab
+  [&::-webkit-slider-thumb]:active:cursor-grabbing
+  [&::-webkit-slider-thumb]:hover:bg-amber-300
+  [&::-moz-range-thumb]:pointer-events-auto
+  [&::-moz-range-thumb]:appearance-none
+  [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5
+  [&::-moz-range-thumb]:rounded-full
+  [&::-moz-range-thumb]:bg-amber-400
+  [&::-moz-range-thumb]:border-2
+  [&::-moz-range-thumb]:border-gray-950
+  [&::-moz-range-thumb]:cursor-grab
+`.trim();
+
 /* ─── Aggregation helpers ─── */
 
 function toDate(dateStr) {
@@ -112,7 +133,7 @@ function aggregateRuns(runs, period) {
   return result;
 }
 
-/* ─── Trend helpers ─── */
+/* ─── Trend / stats helpers ─── */
 
 function computeTrend(aggregated, metricKey) {
   const values = aggregated
@@ -138,35 +159,195 @@ function computeOverallAvg(aggregated, metricKey) {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+function computeBest(aggregated, metricKey, period) {
+  let best = null;
+  for (const d of aggregated) {
+    if (d[metricKey] != null && (best == null || d[metricKey] > best.value)) {
+      best = { value: d[metricKey], label: formatLabel(d.groupKey, period) };
+    }
+  }
+  return best;
+}
+
+/** Consecutive periods of increase or decrease from the end */
+function computeStreak(aggregated, metricKey) {
+  const values = aggregated
+    .map((d) => d[metricKey])
+    .filter((v) => v != null);
+  if (values.length < 2) return null;
+
+  const lastDir = values[values.length - 1] >= values[values.length - 2] ? 'up' : 'down';
+  let count = 1;
+  for (let i = values.length - 2; i > 0; i--) {
+    const dir = values[i] >= values[i - 1] ? 'up' : 'down';
+    if (dir === lastDir) count++;
+    else break;
+  }
+  if (count < 2) return null;
+  return { direction: lastDir, count };
+}
+
+/** Coefficient of variation — std dev as % of mean */
+function computeConsistency(aggregated, metricKey) {
+  const values = aggregated
+    .map((d) => d[metricKey])
+    .filter((v) => v != null);
+  if (values.length < 2) return null;
+
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  if (mean === 0) return null;
+
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  const cv = (Math.sqrt(variance) / Math.abs(mean)) * 100;
+  return cv;
+}
+
+/** Simple linear regression → returns array of y-values for the trend line */
+function computeLinearRegression(aggregated, metricKey) {
+  const points = [];
+  for (let i = 0; i < aggregated.length; i++) {
+    const v = aggregated[i][metricKey];
+    if (v != null) points.push({ x: i, y: v });
+  }
+  if (points.length < 2) return null;
+
+  const n = points.length;
+  const sumX = points.reduce((s, p) => s + p.x, 0);
+  const sumY = points.reduce((s, p) => s + p.y, 0);
+  const sumXY = points.reduce((s, p) => s + p.x * p.y, 0);
+  const sumX2 = points.reduce((s, p) => s + p.x * p.x, 0);
+
+  const denom = n * sumX2 - sumX * sumX;
+  if (denom === 0) return null;
+
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+
+  return aggregated.map((_, i) => slope * i + intercept);
+}
+
+/* ─── TimelineSlider component ─── */
+
+function TimelineSlider({ length, rangeStart, rangeEnd, onChange, getLabel, periodName }) {
+  if (length < 2) return null;
+
+  const max = length - 1;
+
+  function handleMinChange(e) {
+    const val = parseInt(e.target.value, 10);
+    onChange(Math.min(val, rangeEnd), rangeEnd);
+  }
+
+  function handleMaxChange(e) {
+    const val = parseInt(e.target.value, 10);
+    onChange(rangeStart, Math.max(val, rangeStart));
+  }
+
+  const leftPct = max > 0 ? (rangeStart / max) * 100 : 0;
+  const rightPct = max > 0 ? ((max - rangeEnd) / max) * 100 : 0;
+  const showing = rangeEnd - rangeStart + 1;
+
+  return (
+    <div className="space-y-0.5 px-1">
+      {/* Date labels */}
+      <div className="flex justify-between text-[10px] text-gray-500">
+        <span>{getLabel(rangeStart)}</span>
+        {rangeStart !== rangeEnd && <span>{getLabel(rangeEnd)}</span>}
+      </div>
+
+      {/* Slider track */}
+      <div className="relative h-6">
+        {/* Full track background */}
+        <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-1 bg-gray-700 rounded-full" />
+
+        {/* Active segment */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 h-1 bg-amber-500/50 rounded-full"
+          style={{ left: `${leftPct}%`, right: `${rightPct}%` }}
+        />
+
+        {/* Min handle */}
+        <input
+          type="range"
+          min={0}
+          max={max}
+          value={rangeStart}
+          onChange={handleMinChange}
+          className={`absolute w-full h-6 appearance-none bg-transparent pointer-events-none ${RANGE_THUMB}`}
+          style={{ zIndex: rangeStart > max * 0.9 ? 5 : 3 }}
+        />
+
+        {/* Max handle */}
+        <input
+          type="range"
+          min={0}
+          max={max}
+          value={rangeEnd}
+          onChange={handleMaxChange}
+          className={`absolute w-full h-6 appearance-none bg-transparent pointer-events-none ${RANGE_THUMB}`}
+          style={{ zIndex: 4 }}
+        />
+      </div>
+
+      {/* Period count */}
+      {showing < length && (
+        <div className="text-center text-[10px] text-gray-500">
+          Showing {showing} of {length} {periodName}s
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── MetricSection component ─── */
 
 function MetricSection({ metric, aggregated, period }) {
   const avg = computeOverallAvg(aggregated, metric.key);
   const trend = computeTrend(aggregated, metric.key);
+  const best = computeBest(aggregated, metric.key, period);
+  const streak = computeStreak(aggregated, metric.key);
+  const consistency = computeConsistency(aggregated, metric.key);
+  const trendLine = computeLinearRegression(aggregated, metric.key);
   const hasData = aggregated.some((d) => d[metric.key] != null);
 
   const periodLabel =
     period === 'Daily' ? 'day' : period === 'Weekly' ? 'week' : 'month';
 
+  const datasets = [
+    {
+      label: metric.label,
+      data: aggregated.map((d) =>
+        d[metric.key] != null ? Number(d[metric.key]) : null
+      ),
+      borderColor: metric.color,
+      backgroundColor: metric.color + '18',
+      fill: true,
+      cubicInterpolationMode: 'monotone',
+      tension: 0.4,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      pointBackgroundColor: metric.color,
+      spanGaps: true,
+    },
+  ];
+
+  if (trendLine) {
+    datasets.push({
+      label: 'Trend',
+      data: trendLine,
+      borderColor: metric.color + '60',
+      borderDash: [6, 4],
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      fill: false,
+      spanGaps: true,
+    });
+  }
+
   const chartData = {
     labels: aggregated.map((d) => formatLabel(d.groupKey, period)),
-    datasets: [
-      {
-        label: metric.label,
-        data: aggregated.map((d) =>
-          d[metric.key] != null ? Number(d[metric.key]) : null
-        ),
-        borderColor: metric.color,
-        backgroundColor: metric.color + '18',
-        fill: true,
-        cubicInterpolationMode: 'monotone',
-        tension: 0.4,
-        pointRadius: 3,
-        pointHoverRadius: 6,
-        pointBackgroundColor: metric.color,
-        spanGaps: true,
-      },
-    ],
+    datasets,
   };
 
   const chartOptions = {
@@ -176,6 +357,7 @@ function MetricSection({ metric, aggregated, period }) {
     plugins: {
       legend: { display: false },
       tooltip: {
+        filter: (item) => item.dataset.label !== 'Trend',
         callbacks: {
           label: (ctx) => `${metric.label}: ${metric.format(ctx.parsed.y)}`,
         },
@@ -187,6 +369,7 @@ function MetricSection({ metric, aggregated, period }) {
         grid: { color: 'rgba(75,85,99,0.3)' },
       },
       y: {
+        min: 0,
         ticks: {
           color: metric.color,
           callback: (v) => formatNumber(v),
@@ -233,26 +416,61 @@ function MetricSection({ metric, aggregated, period }) {
         </div>
       )}
 
-      {/* Trend */}
-      {trend && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs">
-          {trend.pctChange >= 0 ? (
-            <span className="text-emerald-400">
-              ↑ {Math.abs(trend.pctChange).toFixed(1)}%
+      {/* Stats rows */}
+      <div className="mt-2 space-y-1 text-xs">
+        {/* Row 1: trend + previous → current */}
+        {trend && (
+          <div className="flex items-center gap-1.5">
+            {trend.pctChange >= 0 ? (
+              <span className="text-emerald-400">
+                ↑ {Math.abs(trend.pctChange).toFixed(1)}%
+              </span>
+            ) : (
+              <span className="text-red-400">
+                ↓ {Math.abs(trend.pctChange).toFixed(1)}%
+              </span>
+            )}
+            <span className="text-gray-500">
+              vs previous {periodLabel}
             </span>
-          ) : (
-            <span className="text-red-400">
-              ↓ {Math.abs(trend.pctChange).toFixed(1)}%
+            <span className="text-gray-600 ml-auto">
+              {metric.format(trend.previous)} → {metric.format(trend.current)}
+            </span>
+          </div>
+        )}
+
+        {/* Row 2: best · streak · consistency */}
+        <div className="flex items-center gap-1.5 text-gray-500">
+          {best && (
+            <span>
+              Best: <span className="text-gray-300">{metric.format(best.value)}</span>
+              {' '}
+              <span className="text-gray-600">({best.label})</span>
             </span>
           )}
-          <span className="text-gray-500">
-            vs previous {periodLabel}
-          </span>
-          <span className="text-gray-600 ml-auto">
-            {metric.format(trend.previous)} → {metric.format(trend.current)}
-          </span>
+          {streak && (
+            <>
+              {best && <span className="text-gray-700">·</span>}
+              <span>
+                {streak.direction === 'up' ? (
+                  <span className="text-emerald-400">↑</span>
+                ) : (
+                  <span className="text-red-400">↓</span>
+                )}{' '}
+                {streak.count} {periodLabel}s in a row
+              </span>
+            </>
+          )}
+          {consistency != null && (
+            <>
+              {(best || streak) && <span className="text-gray-700">·</span>}
+              <span>
+                ±{consistency.toFixed(0)}% variance
+              </span>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -261,14 +479,29 @@ function MetricSection({ metric, aggregated, period }) {
 
 export default function Stats({ refreshKey }) {
   const [period, setPeriod] = useState('Daily');
+  const [rangeStart, setRangeStart] = useState(0);
+  const [rangeEnd, setRangeEnd] = useState(null);
 
   const runs = getLocalRuns();
 
-  const aggregated = useMemo(
+  const allAggregated = useMemo(
     () => aggregateRuns(runs, period),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [refreshKey, period]
   );
+
+  // Reset slider when period changes or data changes
+  useMemo(() => {
+    setRangeStart(0);
+    setRangeEnd(allAggregated.length > 0 ? allAggregated.length - 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allAggregated.length, period]);
+
+  const effectiveEnd = rangeEnd != null
+    ? Math.min(rangeEnd, allAggregated.length - 1)
+    : allAggregated.length - 1;
+  const effectiveStart = Math.min(rangeStart, Math.max(effectiveEnd, 0));
+  const displayed = allAggregated.slice(effectiveStart, effectiveEnd + 1);
 
   /* ── Render ── */
 
@@ -299,12 +532,29 @@ export default function Stats({ refreshKey }) {
         ))}
       </div>
 
+      {/* Timeline slider */}
+      {allAggregated.length >= 2 && (
+        <TimelineSlider
+          length={allAggregated.length}
+          rangeStart={effectiveStart}
+          rangeEnd={effectiveEnd}
+          onChange={(s, e) => {
+            setRangeStart(s);
+            setRangeEnd(e);
+          }}
+          getLabel={(idx) =>
+            formatLabel(allAggregated[idx]?.groupKey ?? '', period)
+          }
+          periodName={period === 'Daily' ? 'day' : period === 'Weekly' ? 'week' : 'month'}
+        />
+      )}
+
       {/* Metric sections */}
       {STAT_METRICS.map((metric) => (
         <MetricSection
           key={metric.key}
           metric={metric}
-          aggregated={aggregated}
+          aggregated={displayed}
           period={period}
         />
       ))}
