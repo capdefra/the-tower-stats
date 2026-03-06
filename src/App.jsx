@@ -3,8 +3,9 @@ import PasteInput from './components/PasteInput';
 import LocalHistory from './components/LocalHistory';
 import Milestones from './components/Milestones';
 import Dashboard from './components/Dashboard';
+import Stats from './components/Stats';
 
-const TABS = ['Import', 'History', 'Milestones', 'Dashboard'];
+const TABS = ['Import', 'History', 'Milestones', 'Dashboard', 'Stats'];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(0);
@@ -51,6 +52,7 @@ export default function App() {
         {activeTab === 1 && <LocalHistory refreshKey={refreshKey} onChanged={handleSaved} />}
         {activeTab === 2 && <Milestones refreshKey={refreshKey} onChanged={handleSaved} />}
         {activeTab === 3 && <Dashboard refreshKey={refreshKey} />}
+        {activeTab === 4 && <Stats refreshKey={refreshKey} />}
       </main>
 
       {/* Footer */}
