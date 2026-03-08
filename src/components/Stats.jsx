@@ -833,7 +833,7 @@ function MilestoneDetailPanel({ milestones, dateLabel, metricDeltas }) {
   const hasMetrics = metricDeltas && metricDeltas.length > 0;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-sm border-t border-gray-700 shadow-2xl transition-all">
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-sm border-t border-gray-700 shadow-2xl transition-all" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       {/* Header bar — always visible */}
       <button
         onClick={() => setExpanded((e) => !e)}
