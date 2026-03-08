@@ -798,6 +798,178 @@ function MetricSection({ metric, aggregated, period, milestones, selectedMilesto
   );
 }
 
+/* ─── Sticky Milestone Detail Panel ─── */
+
+function MilestoneDetailPanel({ milestones, dateLabel, metricDeltas }) {
+  const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState('milestones');
+  const prevDateRef = useRef(dateLabel);
+
+  // Auto-collapse when selection changes to a different date
+  useEffect(() => {
+    if (dateLabel !== prevDateRef.current) {
+      setExpanded(false);
+      prevDateRef.current = dateLabel;
+    }
+  }, [dateLabel]);
+
+  // Group milestones by filter key for organized display
+  // Must be before early return to respect rules of hooks
+  const grouped = useMemo(() => {
+    if (!milestones || milestones.length === 0) return [];
+    const map = new Map();
+    for (const ms of milestones) {
+      const filterKey = getMilestoneFilterKey(ms);
+      const filter = MILESTONE_FILTERS.find((f) => f.key === filterKey);
+      const label = filter?.label ?? ms.type;
+      if (!map.has(label)) map.set(label, { type: ms.type, items: [] });
+      map.get(label).items.push(ms);
+    }
+    return [...map.entries()]; // [[label, { type, items }], ...]
+  }, [milestones]);
+
+  if (!milestones || milestones.length === 0) return null;
+
+  const hasMetrics = metricDeltas && metricDeltas.length > 0;
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-sm border-t border-gray-700 shadow-2xl transition-all">
+      {/* Header bar — always visible */}
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="cursor-pointer w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rotate-45 bg-amber-400" />
+            <span className="text-sm font-medium text-gray-200">{dateLabel}</span>
+          </div>
+          <span className="text-xs text-gray-500">
+            {milestones.length} milestone{milestones.length !== 1 ? 's' : ''}
+          </span>
+          {/* Type summary dots */}
+          <div className="flex items-center gap-1">
+            {grouped.map(([label, { type }]) => (
+              <span
+                key={label}
+                className="w-1.5 h-1.5 rounded-full"
+                style={{ backgroundColor: MILESTONE_COLORS[type] }}
+              />
+            ))}
+          </div>
+        </div>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+      </button>
+
+      {/* Expanded content */}
+      <div
+        className={`overflow-hidden transition-all duration-200 ${
+          expanded ? 'max-h-80' : 'max-h-0'
+        }`}
+      >
+        {/* Tabs — only show if metrics are available */}
+        {hasMetrics && (
+          <div className="flex border-b border-gray-800 px-4 gap-4">
+            <button
+              onClick={() => setActiveTab('milestones')}
+              className={`cursor-pointer text-xs font-medium pb-2 border-b-2 transition-colors ${
+                activeTab === 'milestones'
+                  ? 'border-amber-500 text-amber-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Upgrades
+            </button>
+            <button
+              onClick={() => setActiveTab('impact')}
+              className={`cursor-pointer text-xs font-medium pb-2 border-b-2 transition-colors ${
+                activeTab === 'impact'
+                  ? 'border-amber-500 text-amber-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Impact
+            </button>
+          </div>
+        )}
+
+        <div className="px-4 py-3 overflow-y-auto max-h-64">
+          {/* Milestones tab (or only content when no metrics) */}
+          {(activeTab === 'milestones' || !hasMetrics) && (
+            <div className="space-y-2">
+              {grouped.map(([label, { type, items }]) => (
+                <div key={label}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: MILESTONE_COLORS[type] }}
+                    />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+                      {label} ({items.length})
+                    </span>
+                  </div>
+                  <div className="pl-3 space-y-0.5">
+                    {items.map((ms, j) => (
+                      <div key={j} className="text-xs text-gray-300">
+                        {formatMilestoneLabel(ms)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Impact tab */}
+          {activeTab === 'impact' && hasMetrics && (
+            <div className="space-y-2">
+              <p className="text-[10px] text-gray-600">
+                Avg {metricDeltas[0].beforeCount}d before → avg {metricDeltas[0].afterCount}d after
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {metricDeltas.map((d) => (
+                  <div
+                    key={d.label}
+                    className="rounded-lg bg-gray-800/60 border border-gray-700/50 px-2.5 py-2"
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: d.color }}
+                      />
+                      <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+                        {d.label}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-300">
+                      {d.format(d.before)}{' '}
+                      <span className="text-gray-600">→</span>{' '}
+                      {d.format(d.after)}
+                    </div>
+                    <div className={`text-[11px] font-medium ${
+                      d.pctChange >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    }`}>
+                      {d.pctChange >= 0 ? '↑' : '↓'}{' '}
+                      {Math.abs(d.pctChange).toFixed(1)}%
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main component ─── */
 
 export default function Stats({ refreshKey }) {
@@ -841,6 +1013,80 @@ export default function Stats({ refreshKey }) {
   const effectiveStart = Math.min(rangeStart, Math.max(effectiveEnd, 0));
   const displayed = allAggregated.slice(effectiveStart, effectiveEnd + 1);
 
+  // Milestones for the currently selected date (for the sticky detail panel)
+  const selectedGroupKey =
+    selectedMilestoneIdx != null
+      ? allAggregated[effectiveStart + selectedMilestoneIdx]?.groupKey ?? null
+      : null;
+
+  const selectedMilestones = useMemo(() => {
+    if (!selectedGroupKey) return null;
+    const matches = filteredMilestones.filter((ms) => {
+      const d = new Date(ms.savedAt);
+      if (isNaN(d.getTime())) return false;
+      let key;
+      if (period === 'Weekly') key = getWeekKey(d);
+      else if (period === 'Monthly') key = getMonthKey(d);
+      else key = getDayKey(d);
+      return key === selectedGroupKey;
+    });
+    return matches.length > 0 ? matches : null;
+  }, [selectedGroupKey, filteredMilestones, period]);
+
+  const selectedDateLabel = selectedGroupKey
+    ? formatLabel(selectedGroupKey, period)
+    : '';
+
+  // Before/after metric deltas: average of up to 7 periods before vs 7 periods after
+  const metricDeltas = useMemo(() => {
+    if (selectedMilestoneIdx == null) return null;
+    // Use the index in allAggregated (not displayed) for full range access
+    const globalIdx = effectiveStart + selectedMilestoneIdx;
+    if (globalIdx < 0 || globalIdx >= allAggregated.length) return null;
+
+    const WINDOW = 7;
+
+    function avgWindow(startIdx, endIdx, metricKey) {
+      const values = [];
+      for (let i = startIdx; i <= endIdx; i++) {
+        if (i >= 0 && i < allAggregated.length) {
+          const v = allAggregated[i][metricKey];
+          if (v != null && !isNaN(v)) values.push(v);
+        }
+      }
+      return values.length > 0
+        ? { avg: values.reduce((s, v) => s + v, 0) / values.length, count: values.length }
+        : null;
+    }
+
+    // Before: up to 7 periods ending the day before the milestone
+    // After: up to 7 periods starting the day after the milestone
+    // The milestone day itself is excluded (upgrades can happen mid-day)
+    const beforeEnd = globalIdx - 1;
+    const beforeStart = globalIdx - WINDOW;
+    const afterStart = globalIdx + 1;
+    const afterEnd = globalIdx + WINDOW;
+
+    if (beforeEnd < 0 || afterStart >= allAggregated.length) return null;
+
+    const deltas = STAT_METRICS.map((m) => {
+      const bw = avgWindow(beforeStart, beforeEnd, m.key);
+      const aw = avgWindow(afterStart, afterEnd, m.key);
+      if (!bw || !aw || bw.avg === 0) return null;
+      return {
+        label: m.label,
+        color: m.color,
+        format: m.format,
+        before: bw.avg,
+        after: aw.avg,
+        beforeCount: bw.count,
+        afterCount: aw.count,
+        pctChange: ((aw.avg - bw.avg) / Math.abs(bw.avg)) * 100,
+      };
+    }).filter(Boolean);
+    return deltas.length > 0 ? deltas : null;
+  }, [selectedMilestoneIdx, effectiveStart, allAggregated]);
+
   /* ── Render ── */
 
   if (runs.length === 0) {
@@ -851,8 +1097,10 @@ export default function Stats({ refreshKey }) {
     );
   }
 
+  const hasPanelVisible = selectedMilestones != null && selectedMilestones.length > 0;
+
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${hasPanelVisible ? 'pb-14' : ''}`}>
       {/* Period toggle */}
       <div className="flex rounded-lg overflow-hidden border border-gray-700 max-w-xs">
         {PERIODS.map((p) => (
@@ -912,6 +1160,13 @@ export default function Stats({ refreshKey }) {
           onSelectMilestone={setSelectedMilestoneIdx}
         />
       ))}
+
+      {/* Sticky milestone detail panel */}
+      <MilestoneDetailPanel
+        milestones={selectedMilestones}
+        dateLabel={selectedDateLabel}
+        metricDeltas={metricDeltas}
+      />
     </div>
   );
 }

@@ -42,6 +42,23 @@ function formatDate(iso) {
   }
 }
 
+/* ─── Highlight matched substring ─── */
+
+function highlightMatch(text, query) {
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="bg-amber-500/30 text-amber-200 rounded-sm px-0.5">
+        {text.slice(idx, idx + query.length)}
+      </span>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
 /* ─── Searchable Research Picker ─── */
 
 function ResearchPicker({ groups, selected, onSelect, placeholder = 'Select an item...', searchPlaceholder = 'Search...' }) {
@@ -51,12 +68,23 @@ function ResearchPicker({ groups, selected, onSelect, placeholder = 'Select an i
   const filtered =
     search.trim() === ''
       ? groups
-      : groups.map((group) => ({
-          category: group.category,
-          items: group.items.filter((item) =>
-            item.toLowerCase().includes(search.toLowerCase())
-          ),
-        })).filter((group) => group.items.length > 0);
+      : groups
+          .map((group) => {
+            const q = search.toLowerCase();
+            const categoryMatch = group.category.toLowerCase().includes(q);
+            if (categoryMatch) {
+              return { ...group, _catMatch: true };
+            }
+            const items = group.items.filter((item) =>
+              item.toLowerCase().includes(q)
+            );
+            return items.length > 0
+              ? { ...group, items, _catMatch: false }
+              : null;
+          })
+          .filter(Boolean);
+
+  const query = search.trim();
 
   function handleSelect(category, item) {
     onSelect({ category, name: item });
@@ -102,8 +130,10 @@ function ResearchPicker({ groups, selected, onSelect, placeholder = 'Select an i
             {/* Grouped items */}
             {filtered.map((group) => (
               <div key={group.category}>
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500 bg-gray-800/90 sticky top-[41px] z-[5]">
-                  {group.category}
+                <div className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider bg-gray-800/90 sticky top-[41px] z-[5] ${
+                  group._catMatch ? 'text-amber-400' : 'text-gray-500'
+                }`}>
+                  {group._catMatch ? highlightMatch(group.category, query) : group.category}
                 </div>
                 {group.items.map((item) => {
                   const isActive =
@@ -118,7 +148,7 @@ function ResearchPicker({ groups, selected, onSelect, placeholder = 'Select an i
                           : 'text-gray-300 hover:bg-gray-700/50'
                       }`}
                     >
-                      {item}
+                      {group._catMatch ? item : highlightMatch(item, query)}
                     </button>
                   );
                 })}
