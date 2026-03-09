@@ -931,7 +931,7 @@ function MilestoneDetailPanel({ milestones, dateLabel, metricDeltas }) {
           {activeTab === 'impact' && hasMetrics && (
             <div className="space-y-2">
               <p className="text-[10px] text-gray-600">
-                Avg {metricDeltas[0].beforeCount}d before → avg {metricDeltas[0].afterCount}d after
+                Avg {metricDeltas[0].beforeCount}{metricDeltas[0].periodUnit} before → avg {metricDeltas[0].afterCount}{metricDeltas[0].periodUnit} after
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {metricDeltas.map((d) => (
@@ -1037,14 +1037,15 @@ export default function Stats({ refreshKey }) {
     ? formatLabel(selectedGroupKey, period)
     : '';
 
-  // Before/after metric deltas: average of up to 7 periods before vs 7 periods after
+  // Before/after metric deltas: compare periods before vs after the milestone
+  // Daily: 5 days before vs 5 days after; Weekly/Monthly: 1 period before vs 1 after
+  // The milestone period itself is always excluded
   const metricDeltas = useMemo(() => {
     if (selectedMilestoneIdx == null) return null;
-    // Use the index in allAggregated (not displayed) for full range access
     const globalIdx = effectiveStart + selectedMilestoneIdx;
     if (globalIdx < 0 || globalIdx >= allAggregated.length) return null;
 
-    const WINDOW = 7;
+    const WINDOW = period === 'Daily' ? 5 : 1;
 
     function avgWindow(startIdx, endIdx, metricKey) {
       const values = [];
@@ -1059,9 +1060,6 @@ export default function Stats({ refreshKey }) {
         : null;
     }
 
-    // Before: up to 7 periods ending the day before the milestone
-    // After: up to 7 periods starting the day after the milestone
-    // The milestone day itself is excluded (upgrades can happen mid-day)
     const beforeEnd = globalIdx - 1;
     const beforeStart = globalIdx - WINDOW;
     const afterStart = globalIdx + 1;
@@ -1082,10 +1080,11 @@ export default function Stats({ refreshKey }) {
         beforeCount: bw.count,
         afterCount: aw.count,
         pctChange: ((aw.avg - bw.avg) / Math.abs(bw.avg)) * 100,
+        periodUnit: period === 'Daily' ? 'd' : period === 'Weekly' ? 'w' : 'mo',
       };
     }).filter(Boolean);
     return deltas.length > 0 ? deltas : null;
-  }, [selectedMilestoneIdx, effectiveStart, allAggregated]);
+  }, [selectedMilestoneIdx, effectiveStart, allAggregated, period]);
 
   /* ── Render ── */
 
