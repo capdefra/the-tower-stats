@@ -41,6 +41,7 @@ const MILESTONE_COLORS = {
   workshop: '#f59e0b',
   cards: '#ec4899',
   ultimate_weapons: '#06b6d4',
+  bots: '#22d3ee',
 };
 
 const MILESTONE_FILTERS = [
@@ -51,6 +52,8 @@ const MILESTONE_FILTERS = [
   { key: 'cards:card_upgrade', label: 'Card Upgrade', type: 'cards', subtype: 'card_upgrade' },
   { key: 'ultimate_weapons:uw_unlock', label: 'UW Unlock', type: 'ultimate_weapons', subtype: 'uw_unlock' },
   { key: 'ultimate_weapons:uw_upgrade', label: 'UW Upgrade', type: 'ultimate_weapons', subtype: 'uw_upgrade' },
+  { key: 'bots:bot_unlock', label: 'Bot Unlock', type: 'bots', subtype: 'bot_unlock' },
+  { key: 'bots:bot_upgrade', label: 'Bot Upgrade', type: 'bots', subtype: 'bot_upgrade' },
 ];
 
 const RANGE_THUMB = `
@@ -263,6 +266,9 @@ function formatMilestoneLabel(ms) {
     case 'ultimate_weapons':
       if (ms.subtype === 'uw_unlock') return `UW Unlock: ${ms.name}`;
       return `UW Upgrade: ${ms.name} (+${ms.levels} lvl)`;
+    case 'bots':
+      if (ms.subtype === 'bot_unlock') return `Bot Unlock: ${ms.name}`;
+      return `Bot Upgrade: ${ms.name} (+${ms.levels} lvl)`;
     default:
       return ms.name || 'Milestone';
   }
