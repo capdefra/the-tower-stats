@@ -4,7 +4,7 @@ import CARDS from '../data/cards';
 import { WORKSHOP_UNLOCKS, WORKSHOP_UPGRADES } from '../data/workshop';
 import { UW_LIST, UW_UPGRADES } from '../data/ultimateWeapons';
 import { BOT_LIST, BOT_UPGRADES } from '../data/bots';
-import { getMilestones, saveMilestone, deleteMilestone } from '../utils/storage';
+import { getMilestones, saveMilestone, deleteMilestone, updateMilestone } from '../utils/storage';
 
 const SPEED_MULTIPLIERS = [1, 1.5, 2, 3, 4, 5, 6, 7, 8];
 
@@ -57,6 +57,158 @@ function highlightMatch(text, query) {
       </span>
       {text.slice(idx + query.length)}
     </>
+  );
+}
+
+/* ─── Dot Menu with Edit & Delete ─── */
+
+function MilestoneDotMenu({ onEdit, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  function handleToggle(e) {
+    e.stopPropagation();
+    setOpen((o) => !o);
+  }
+
+  function handleEditClick() {
+    setOpen(false);
+    onEdit();
+  }
+
+  function handleDeleteClick() {
+    setOpen(false);
+    setShowConfirm(true);
+  }
+
+  function handleConfirmDelete() {
+    setShowConfirm(false);
+    onDelete();
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={handleToggle}
+        className="cursor-pointer p-1 rounded hover:bg-gray-700/50 text-gray-500 hover:text-gray-300 transition-colors"
+      >
+        <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+          <circle cx="10" cy="4" r="1.5" />
+          <circle cx="10" cy="10" r="1.5" />
+          <circle cx="10" cy="16" r="1.5" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute z-20 right-0 mt-1 w-36 rounded-lg bg-gray-800 border border-gray-700 shadow-xl overflow-hidden">
+            <button
+              onClick={handleEditClick}
+              className="cursor-pointer w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700/50 flex items-center gap-2 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
+            </button>
+            <button
+              onClick={handleDeleteClick}
+              className="cursor-pointer w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-900/20 flex items-center gap-2 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Delete confirmation overlay */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-sm p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-100">Delete Milestone</h3>
+            <p className="text-sm text-gray-400">
+              Are you sure you want to delete this milestone? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="cursor-pointer px-4 py-1.5 text-sm rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="cursor-pointer px-4 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Milestone Edit Modal ─── */
+
+function MilestoneEditModal({ milestone, onSave, onClose }) {
+  const [json, setJson] = useState(() => JSON.stringify(milestone, null, 2));
+  const [error, setError] = useState(null);
+
+  function handleSave() {
+    try {
+      const updated = JSON.parse(json);
+      if (!updated.type) {
+        setError('type is required');
+        return;
+      }
+      onSave(updated);
+    } catch (e) {
+      setError('Invalid JSON: ' + e.message);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-100">Edit Milestone</h3>
+          <button
+            onClick={onClose}
+            className="cursor-pointer text-gray-400 hover:text-gray-200 text-lg"
+          >
+            &times;
+          </button>
+        </div>
+        <div className="p-4 flex-1 overflow-hidden flex flex-col gap-3">
+          <textarea
+            value={json}
+            onChange={(e) => setJson(e.target.value)}
+            className="flex-1 min-h-[200px] w-full rounded-lg bg-gray-800 border border-gray-700 text-gray-100 p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+          />
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-700">
+          <button
+            onClick={onClose}
+            className="cursor-pointer px-4 py-1.5 text-sm rounded-lg border border-gray-700 text-gray-300 hover:text-gray-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="cursor-pointer px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -176,6 +328,7 @@ function LabResearchSection({ onSaved }) {
   const [multiplier, setMultiplier] = useState(1);
   const [milestones, setMilestones] = useState(() => getMilestones());
   const [, setTick] = useState(0);
+  const [editing, setEditing] = useState(null);
 
   // Refresh milestones list
   function refresh() {
@@ -222,6 +375,12 @@ function LabResearchSection({ onSaved }) {
 
   function handleDelete(id) {
     deleteMilestone(id);
+    refresh();
+  }
+
+  function handleEditSave(updated) {
+    updateMilestone(editing.id, updated);
+    setEditing(null);
     refresh();
   }
 
@@ -322,12 +481,7 @@ function LabResearchSection({ onSaved }) {
                     <span className="text-[10px] text-gray-500 uppercase tracking-wider">
                       {ms.category}
                     </span>
-                    <button
-                      onClick={() => handleDelete(ms.id)}
-                      className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                    >
-                      ✕
-                    </button>
+                    <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                   </div>
                   <div className="text-gray-100 font-semibold text-sm">{ms.name}</div>
                   <div className="flex items-center gap-3 text-xs">
@@ -393,12 +547,7 @@ function LabResearchSection({ onSaved }) {
                         </span>
                       </td>
                       <td className="py-2">
-                        <button
-                          onClick={() => handleDelete(ms.id)}
-                          className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                        >
-                          ✕
-                        </button>
+                        <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                       </td>
                     </tr>
                   );
@@ -407,6 +556,14 @@ function LabResearchSection({ onSaved }) {
             </table>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <MilestoneEditModal
+          milestone={editing}
+          onSave={handleEditSave}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );
@@ -419,6 +576,7 @@ function WorkshopSection({ onSaved }) {
   const [selected, setSelected] = useState(null);
   const [levels, setLevels] = useState('');
   const [milestones, setMilestones] = useState(() => getMilestones());
+  const [editing, setEditing] = useState(null);
 
   function refresh() {
     setMilestones(getMilestones());
@@ -451,6 +609,12 @@ function WorkshopSection({ onSaved }) {
 
   function handleDelete(id) {
     deleteMilestone(id);
+    refresh();
+  }
+
+  function handleEditSave(updated) {
+    updateMilestone(editing.id, updated);
+    setEditing(null);
     refresh();
   }
 
@@ -550,12 +714,7 @@ function WorkshopSection({ onSaved }) {
                   <span className="text-[10px] text-gray-500 uppercase tracking-wider">
                     {ms.category}
                   </span>
-                  <button
-                    onClick={() => handleDelete(ms.id)}
-                    className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                  >
-                    ✕
-                  </button>
+                  <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                 </div>
                 <div className="text-gray-100 font-semibold text-sm">{ms.name}</div>
                 <div className="flex items-center gap-3 text-xs">
@@ -599,12 +758,7 @@ function WorkshopSection({ onSaved }) {
                       {formatDate(ms.savedAt)}
                     </td>
                     <td className="py-2">
-                      <button
-                        onClick={() => handleDelete(ms.id)}
-                        className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                      >
-                        ✕
-                      </button>
+                      <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                     </td>
                   </tr>
                 ))}
@@ -612,6 +766,14 @@ function WorkshopSection({ onSaved }) {
             </table>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <MilestoneEditModal
+          milestone={editing}
+          onSave={handleEditSave}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );
@@ -659,6 +821,7 @@ function CardsSection({ onSaved }) {
   const [selectedCard, setSelectedCard] = useState(null);
   const [level, setLevel] = useState(1);
   const [milestones, setMilestones] = useState(() => getMilestones());
+  const [editing, setEditing] = useState(null);
 
   function refresh() {
     setMilestones(getMilestones());
@@ -688,6 +851,12 @@ function CardsSection({ onSaved }) {
 
   function handleDelete(id) {
     deleteMilestone(id);
+    refresh();
+  }
+
+  function handleEditSave(updated) {
+    updateMilestone(editing.id, updated);
+    setEditing(null);
     refresh();
   }
 
@@ -782,12 +951,7 @@ function CardsSection({ onSaved }) {
                   <span className="text-[10px] text-gray-500 uppercase tracking-wider">
                     {ms.subtype === 'card_upgrade' ? ms.category : 'Card Slot'}
                   </span>
-                  <button
-                    onClick={() => handleDelete(ms.id)}
-                    className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                  >
-                    ✕
-                  </button>
+                  <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                 </div>
                 <div className="text-gray-100 font-semibold text-sm">
                   {ms.subtype === 'card_upgrade' ? ms.name : 'New Card Slot'}
@@ -835,12 +999,7 @@ function CardsSection({ onSaved }) {
                       {formatDate(ms.savedAt)}
                     </td>
                     <td className="py-2">
-                      <button
-                        onClick={() => handleDelete(ms.id)}
-                        className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                      >
-                        ✕
-                      </button>
+                      <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                     </td>
                   </tr>
                 ))}
@@ -848,6 +1007,14 @@ function CardsSection({ onSaved }) {
             </table>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <MilestoneEditModal
+          milestone={editing}
+          onSave={handleEditSave}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );
@@ -861,6 +1028,7 @@ function UltimateWeaponsSection({ onSaved }) {
   const [selectedUpgrade, setSelectedUpgrade] = useState(null);
   const [levels, setLevels] = useState('');
   const [milestones, setMilestones] = useState(() => getMilestones());
+  const [editing, setEditing] = useState(null);
 
   function refresh() {
     setMilestones(getMilestones());
@@ -893,6 +1061,12 @@ function UltimateWeaponsSection({ onSaved }) {
 
   function handleDelete(id) {
     deleteMilestone(id);
+    refresh();
+  }
+
+  function handleEditSave(updated) {
+    updateMilestone(editing.id, updated);
+    setEditing(null);
     refresh();
   }
 
@@ -1007,12 +1181,7 @@ function UltimateWeaponsSection({ onSaved }) {
                   <span className="text-[10px] text-gray-500 uppercase tracking-wider">
                     {ms.subtype === 'uw_upgrade' ? ms.category : 'Unlock'}
                   </span>
-                  <button
-                    onClick={() => handleDelete(ms.id)}
-                    className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                  >
-                    ✕
-                  </button>
+                  <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                 </div>
                 <div className="text-gray-100 font-semibold text-sm">{ms.name}</div>
                 <div className="flex items-center gap-3 text-xs">
@@ -1058,12 +1227,7 @@ function UltimateWeaponsSection({ onSaved }) {
                       {formatDate(ms.savedAt)}
                     </td>
                     <td className="py-2">
-                      <button
-                        onClick={() => handleDelete(ms.id)}
-                        className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                      >
-                        ✕
-                      </button>
+                      <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                     </td>
                   </tr>
                 ))}
@@ -1071,6 +1235,14 @@ function UltimateWeaponsSection({ onSaved }) {
             </table>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <MilestoneEditModal
+          milestone={editing}
+          onSave={handleEditSave}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );
@@ -1084,6 +1256,7 @@ function BotsSection({ onSaved }) {
   const [selectedUpgrade, setSelectedUpgrade] = useState(null);
   const [levels, setLevels] = useState('');
   const [milestones, setMilestones] = useState(() => getMilestones());
+  const [editing, setEditing] = useState(null);
 
   function refresh() {
     setMilestones(getMilestones());
@@ -1116,6 +1289,12 @@ function BotsSection({ onSaved }) {
 
   function handleDelete(id) {
     deleteMilestone(id);
+    refresh();
+  }
+
+  function handleEditSave(updated) {
+    updateMilestone(editing.id, updated);
+    setEditing(null);
     refresh();
   }
 
@@ -1230,12 +1409,7 @@ function BotsSection({ onSaved }) {
                   <span className="text-[10px] text-gray-500 uppercase tracking-wider">
                     {ms.subtype === 'bot_upgrade' ? ms.category : 'Unlock'}
                   </span>
-                  <button
-                    onClick={() => handleDelete(ms.id)}
-                    className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                  >
-                    ✕
-                  </button>
+                  <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                 </div>
                 <div className="text-gray-100 font-semibold text-sm">{ms.name}</div>
                 <div className="flex items-center gap-3 text-xs">
@@ -1281,12 +1455,7 @@ function BotsSection({ onSaved }) {
                       {formatDate(ms.savedAt)}
                     </td>
                     <td className="py-2">
-                      <button
-                        onClick={() => handleDelete(ms.id)}
-                        className="cursor-pointer text-xs text-gray-500 hover:text-red-400 transition-colors"
-                      >
-                        ✕
-                      </button>
+                      <MilestoneDotMenu onEdit={() => setEditing(ms)} onDelete={() => handleDelete(ms.id)} />
                     </td>
                   </tr>
                 ))}
@@ -1294,6 +1463,14 @@ function BotsSection({ onSaved }) {
             </table>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <MilestoneEditModal
+          milestone={editing}
+          onSave={handleEditSave}
+          onClose={() => setEditing(null)}
+        />
       )}
     </div>
   );

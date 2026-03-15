@@ -95,6 +95,17 @@ export function saveMilestone(milestone) {
   return entry;
 }
 
+/** Update a milestone's data by its id. */
+export function updateMilestone(id, updatedMilestone) {
+  const milestones = getMilestones();
+  const idx = milestones.findIndex((m) => m.id === id);
+  if (idx !== -1) {
+    milestones[idx] = { ...updatedMilestone, id, savedAt: milestones[idx].savedAt };
+  }
+  localStorage.setItem(MILESTONES_KEY, JSON.stringify(milestones));
+  return milestones;
+}
+
 /** Delete a milestone by its id. */
 export function deleteMilestone(id) {
   const milestones = getMilestones().filter((m) => m.id !== id);
