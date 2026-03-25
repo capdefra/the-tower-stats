@@ -125,11 +125,18 @@ Tabbed interface with five milestone types:
 
 - **`CountdownTimer`**: Live countdown to research completion. Accepts entered time + game speed multiplier and calculates a real completion timestamp.
 
+- **`MilestoneDotMenu`**: Triple-dot (⋯) button on each milestone history row. Opens a dropdown with Edit and Delete options. Replaces the previous inline delete button across all five milestone types.
+
+- **`MilestoneEditModal`**: Full-screen overlay modal for editing a milestone's raw JSON data. Pre-populates a textarea with the milestone's current data (prettified JSON). On save, parses the JSON and calls `updateMilestone()` to persist changes while preserving the original `id` and `savedAt`.
+
+- **Delete confirmation overlay**: Centered modal overlay triggered from the dot menu's Delete option. Displays "Are you sure you want to delete this milestone?" with Cancel and Delete buttons. Prevents accidental deletions.
+
 - Each section (e.g., `WorkshopSection`, `LabResearchSection`, `CardsSection`, `UltimateWeaponsSection`, `BotsSection`) follows the same pattern:
   - Mode toggle (unlock vs. upgrade where applicable)
   - Form inputs for the specific milestone type
   - Save button → calls `saveMilestone()`
   - History list below with mobile cards and desktop table
+  - Per-row dot menu (⋯) with Edit and Delete actions
 
 ### Dashboard (`components/Dashboard.jsx`)
 
@@ -190,7 +197,7 @@ Two localStorage keys:
 
 **Run operations**: `getLocalRuns()`, `saveLocalRun()`, `deleteLocalRun()`, `updateLocalRun()`, `clearLocalRuns()`
 
-**Milestone operations**: `getMilestones()`, `saveMilestone()`, `deleteMilestone()`, `clearMilestones()`
+**Milestone operations**: `getMilestones()`, `saveMilestone()`, `updateMilestone()`, `deleteMilestone()`, `clearMilestones()`
 
 **Export/Import**: `exportLocalRuns()` bundles both runs + milestones into a versioned JSON object. `importLocalRuns()` handles both legacy and new formats with deduplication by `battleDate` (runs) and `id` (milestones).
 
@@ -224,4 +231,5 @@ The Vite config sets `base: '/the-tower-stats/'` so all assets resolve correctly
 - **Dark theme**: The entire app uses a gray-950 background with amber-400/500 accents. Tailwind v4 dark classes throughout.
 - **Grouped dropdowns**: The `ResearchPicker` component is reused across all milestone sections for consistent searchable, grouped selection.
 - **Chart.js registration**: Both `Dashboard.jsx` and `Stats.jsx` register Chart.js components at module level.
+- **Dot menu pattern**: Both `LocalHistory` and `Milestones` use a triple-dot (⋯) button per row that opens a dropdown with Edit and Delete actions. Delete triggers a confirmation overlay modal; Edit opens a raw JSON editing modal.
 - **Refresh propagation**: `refreshKey` counter in `App.jsx` propagates data changes to sibling components via props.
