@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { formatNumber, formatSeconds, parseBattleReport } from '../utils/parser';
 import {
   getLocalRuns,
@@ -7,6 +7,8 @@ import {
   updateLocalRun,
   exportLocalRuns,
   importLocalRuns,
+  hasMilestonesData,
+  clearMilestonesStorage,
 } from '../utils/storage';
 
 export default function LocalHistory({ refreshKey, onChanged }) {
@@ -15,7 +17,18 @@ export default function LocalHistory({ refreshKey, onChanged }) {
   const [editing, setEditing] = useState(null); // { battleDate, json }
   const [editError, setEditError] = useState(null);
   const [importMsg, setImportMsg] = useState(null);
+  const [hasMilestones, setHasMilestones] = useState(() => hasMilestonesData());
   const fileRef = useRef(null);
+
+  useEffect(() => {
+    setHasMilestones(hasMilestonesData());
+  }, [refreshKey]);
+
+  function handleMigrateMilestones() {
+    if (!confirm('Delete all milestone data from storage? This cannot be undone.')) return;
+    clearMilestonesStorage();
+    setHasMilestones(false);
+  }
 
   function handleClear() {
     if (!confirm('Delete ALL runs? This cannot be undone.')) return;
@@ -68,16 +81,8 @@ export default function LocalHistory({ refreshKey, onChanged }) {
     reader.onload = (ev) => {
       try {
         const result = importLocalRuns(ev.target.result);
-        // Handle both old (number) and new ({ runsAdded, milestonesAdded }) return formats
-        if (typeof result === 'object') {
-          let msg = `Imported ${result.runsAdded} new run${result.runsAdded !== 1 ? 's' : ''}`;
-          if (result.milestonesAdded > 0) {
-            msg += ` and ${result.milestonesAdded} milestone${result.milestonesAdded !== 1 ? 's' : ''}`;
-          }
-          setImportMsg(msg + '.');
-        } else {
-          setImportMsg(`Imported ${result} new run${result !== 1 ? 's' : ''}.`);
-        }
+        const count = typeof result === 'object' ? result.runsAdded : result;
+        setImportMsg(`Imported ${count} new run${count !== 1 ? 's' : ''}.`);
         onChanged?.();
       } catch (err) {
         setImportMsg('Import failed: ' + err.message);
@@ -87,6 +92,18 @@ export default function LocalHistory({ refreshKey, onChanged }) {
     // Reset so the same file can be re-selected
     e.target.value = '';
   }
+
+  const migrateBanner = hasMilestones && (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-amber-700/50 bg-amber-950/30 text-sm">
+      <span className="text-amber-300/80 text-xs">Legacy milestone data found in storage.</span>
+      <button
+        onClick={handleMigrateMilestones}
+        className="cursor-pointer shrink-0 text-xs px-3 py-1 rounded-md border border-amber-600/60 text-amber-400 hover:bg-amber-800/30 transition-colors"
+      >
+        Clean up
+      </button>
+    </div>
+  );
 
   if (runs.length === 0) {
     return (
@@ -109,12 +126,14 @@ export default function LocalHistory({ refreshKey, onChanged }) {
             {importMsg}
           </p>
         )}
+        {migrateBanner}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      {migrateBanner}
       {/* Header row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-sm font-medium text-gray-300">

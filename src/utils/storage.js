@@ -1,6 +1,16 @@
 const STORAGE_KEY = 'tower-stats-history';
 const MILESTONES_KEY = 'tower-stats-milestones';
 
+/** Returns true if legacy milestone data still exists in localStorage. */
+export function hasMilestonesData() {
+  return localStorage.getItem(MILESTONES_KEY) !== null;
+}
+
+/** Removes the legacy milestone data from localStorage. */
+export function clearMilestonesStorage() {
+  localStorage.removeItem(MILESTONES_KEY);
+}
+
 /* ─── Runs ─── */
 
 /** Get all locally saved runs (newest first). */
@@ -63,70 +73,14 @@ export function clearLocalRuns() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-/* ─── Milestones ─── */
+/* ─── Export / Import (runs only) ─── */
 
-/** Get all locally saved milestones (newest first by savedAt). */
-export function getMilestones() {
-  try {
-    const raw = localStorage.getItem(MILESTONES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * Save a new milestone to local storage.
- * Shape: { type, category, name, enteredTime, multiplier, completionTimestamp }
- * Adds id + savedAt automatically.
- */
-export function saveMilestone(milestone) {
-  const milestones = getMilestones();
-  const entry = {
-    ...milestone,
-    id:
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `ms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    savedAt: new Date().toISOString(),
-  };
-  milestones.unshift(entry);
-  localStorage.setItem(MILESTONES_KEY, JSON.stringify(milestones));
-  return entry;
-}
-
-/** Update a milestone's data by its id. */
-export function updateMilestone(id, updatedMilestone) {
-  const milestones = getMilestones();
-  const idx = milestones.findIndex((m) => m.id === id);
-  if (idx !== -1) {
-    milestones[idx] = { ...updatedMilestone, id, savedAt: milestones[idx].savedAt };
-  }
-  localStorage.setItem(MILESTONES_KEY, JSON.stringify(milestones));
-  return milestones;
-}
-
-/** Delete a milestone by its id. */
-export function deleteMilestone(id) {
-  const milestones = getMilestones().filter((m) => m.id !== id);
-  localStorage.setItem(MILESTONES_KEY, JSON.stringify(milestones));
-  return milestones;
-}
-
-/** Clear all milestones. */
-export function clearMilestones() {
-  localStorage.removeItem(MILESTONES_KEY);
-}
-
-/* ─── Export / Import (runs + milestones) ─── */
-
-/** Export all data (runs + milestones) as a JSON string. */
+/** Export all runs as a JSON string. */
 export function exportLocalRuns() {
   return JSON.stringify(
     {
       version: 1,
       runs: getLocalRuns(),
-      milestones: getMilestones(),
     },
     null,
     2
@@ -134,28 +88,29 @@ export function exportLocalRuns() {
 }
 
 /**
- * Import data from a JSON string.
- * Handles both legacy (bare array of runs) and new ({ version, runs, milestones }) formats.
- * Returns { runsAdded, milestonesAdded }.
+ * Import runs from a JSON string.
+ * Handles both legacy (bare array of runs) and new ({ version, runs }) formats.
+ * Returns { runsAdded }.
  */
 export function importLocalRuns(jsonString) {
   const parsed = JSON.parse(jsonString);
 
   let incomingRuns = [];
-  let incomingMilestones = [];
 
   if (Array.isArray(parsed)) {
-    // Legacy format: bare array of runs
     incomingRuns = parsed;
   } else if (parsed && typeof parsed === 'object') {
-    // New format: { version, runs, milestones }
     incomingRuns = Array.isArray(parsed.runs) ? parsed.runs : [];
-    incomingMilestones = Array.isArray(parsed.milestones) ? parsed.milestones : [];
+    // Preserve legacy milestone data so the migration banner can appear
+    if (Array.isArray(parsed.milestones) && parsed.milestones.length > 0) {
+      if (!hasMilestonesData()) {
+        localStorage.setItem(MILESTONES_KEY, JSON.stringify(parsed.milestones));
+      }
+    }
   } else {
-    throw new Error('Invalid format: expected an array or an object with runs/milestones');
+    throw new Error('Invalid format: expected an array or an object with runs');
   }
 
-  // Import runs (dedup by battleDate)
   let runsAdded = 0;
   if (incomingRuns.length > 0) {
     const existing = getLocalRuns();
@@ -171,21 +126,5 @@ export function importLocalRuns(jsonString) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
   }
 
-  // Import milestones (dedup by id)
-  let milestonesAdded = 0;
-  if (incomingMilestones.length > 0) {
-    const existing = getMilestones();
-    const idSet = new Set(existing.map((m) => m.id));
-    for (const ms of incomingMilestones) {
-      if (!ms.id) continue;
-      if (idSet.has(ms.id)) continue;
-      existing.push(ms);
-      idSet.add(ms.id);
-      milestonesAdded++;
-    }
-    existing.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
-    localStorage.setItem(MILESTONES_KEY, JSON.stringify(existing));
-  }
-
-  return { runsAdded, milestonesAdded };
+  return { runsAdded };
 }
