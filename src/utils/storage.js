@@ -1,15 +1,5 @@
 const STORAGE_KEY = 'tower-stats-history';
-const MILESTONES_KEY = 'tower-stats-milestones';
 
-/** Returns true if legacy milestone data still exists in localStorage. */
-export function hasMilestonesData() {
-  return localStorage.getItem(MILESTONES_KEY) !== null;
-}
-
-/** Removes the legacy milestone data from localStorage. */
-export function clearMilestonesStorage() {
-  localStorage.removeItem(MILESTONES_KEY);
-}
 
 /* ─── Runs ─── */
 
@@ -101,12 +91,7 @@ export function importLocalRuns(jsonString) {
     incomingRuns = parsed;
   } else if (parsed && typeof parsed === 'object') {
     incomingRuns = Array.isArray(parsed.runs) ? parsed.runs : [];
-    // Preserve legacy milestone data so the migration banner can appear
-    if (Array.isArray(parsed.milestones) && parsed.milestones.length > 0) {
-      if (!hasMilestonesData()) {
-        localStorage.setItem(MILESTONES_KEY, JSON.stringify(parsed.milestones));
-      }
-    }
+
   } else {
     throw new Error('Invalid format: expected an array or an object with runs');
   }

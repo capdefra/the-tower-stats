@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { formatNumber, formatSeconds, parseBattleReport } from '../utils/parser';
 import {
   getLocalRuns,
@@ -7,8 +7,6 @@ import {
   updateLocalRun,
   exportLocalRuns,
   importLocalRuns,
-  hasMilestonesData,
-  clearMilestonesStorage,
 } from '../utils/storage';
 
 export default function LocalHistory({ refreshKey, onChanged }) {
@@ -17,18 +15,7 @@ export default function LocalHistory({ refreshKey, onChanged }) {
   const [editing, setEditing] = useState(null); // { battleDate, json }
   const [editError, setEditError] = useState(null);
   const [importMsg, setImportMsg] = useState(null);
-  const [hasMilestones, setHasMilestones] = useState(() => hasMilestonesData());
   const fileRef = useRef(null);
-
-  useEffect(() => {
-    setHasMilestones(hasMilestonesData());
-  }, [refreshKey]);
-
-  function handleMigrateMilestones() {
-    if (!confirm('Delete all milestone data from storage? This cannot be undone.')) return;
-    clearMilestonesStorage();
-    setHasMilestones(false);
-  }
 
   function handleClear() {
     if (!confirm('Delete ALL runs? This cannot be undone.')) return;
@@ -93,18 +80,6 @@ export default function LocalHistory({ refreshKey, onChanged }) {
     e.target.value = '';
   }
 
-  const migrateBanner = hasMilestones && (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-amber-700/50 bg-amber-950/30 text-sm">
-      <span className="text-amber-300/80 text-xs">Legacy milestone data found in storage.</span>
-      <button
-        onClick={handleMigrateMilestones}
-        className="cursor-pointer shrink-0 text-xs px-3 py-1 rounded-md border border-amber-600/60 text-amber-400 hover:bg-amber-800/30 transition-colors"
-      >
-        Clean up
-      </button>
-    </div>
-  );
-
   if (runs.length === 0) {
     return (
       <div className="space-y-4">
@@ -126,7 +101,7 @@ export default function LocalHistory({ refreshKey, onChanged }) {
             {importMsg}
           </p>
         )}
-        {migrateBanner}
+
       </div>
     );
   }
