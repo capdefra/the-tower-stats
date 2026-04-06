@@ -108,7 +108,6 @@ export default function LocalHistory({ refreshKey, onChanged }) {
 
   return (
     <div className="space-y-3">
-      {migrateBanner}
       {/* Header row */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-sm font-medium text-gray-300">
